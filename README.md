@@ -16,8 +16,6 @@ Windows C++ projects using CMake with Visual Studio generators cannot use `CMAKE
 - [ ] Response file expansion requires files on disk at parse time (warning emitted when replaying `.binlog` after temp files are cleaned)
 - [ ] Custom MSBuild tasks invoking compilers via `Process` without logging or standard task parameters are not captured
 - [ ] Generated source files are captured but must exist on disk for clangd to use them
-- [ ] Flag translation covers semantic flags only — optimization, codegen, debug info, and runtime library flags pass through untranslated
-- [ ] `/Yc` (create PCH) is stripped, `/Yu` (use PCH) is converted to `/FI` — the `.pch` file itself is not used
 
 ## What it allows you to do
 
@@ -265,6 +263,8 @@ By default, MSVC flags are translated to clang equivalents so clangd understands
 | `/permissive-` | `-fno-ms-extensions` | Conformance |
 | `/c` | `-c` | Compile only |
 
+Optimization levels (`/O1`, `/O2`), code generation (`/arch:*`), debug info (`/Zi`), runtime library (`/MT`, `/MD`), and output paths (`/Fo`, `/Fd`) are not translated — they don't affect clangd's understanding of source code.
+
 ### Custom rules
 
 Export the built-in rules as a starting point, edit, and pass back:
@@ -314,6 +314,7 @@ Rule format:
 - Output path flags (`/Fo`, `/Fe`, `/Fd`, `/Fa`, `/Fp`, etc.)
 - Cosmetic flags (`/nologo`, `/showIncludes`)
 - Linker invocations (automatically filtered)
+- Precompiled header creation (`/Yc` stripped, `/Yu` converted to `/FI` forced include so clangd sees the implicit header; the `.pch` file itself is not used)
 
 ## Supported compilers
 
