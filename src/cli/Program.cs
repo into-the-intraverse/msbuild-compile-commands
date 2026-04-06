@@ -28,7 +28,7 @@ namespace MsBuildCompileCommands.Cli
 
             string? binlogPath = null;
             string outputPath = "compile_commands.json";
-            bool merge = false;
+            bool overwrite = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -45,9 +45,9 @@ namespace MsBuildCompileCommands.Cli
                         return 1;
                     }
                 }
-                else if (string.Equals(arg, "--merge", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(arg, "--overwrite", StringComparison.OrdinalIgnoreCase))
                 {
-                    merge = true;
+                    overwrite = true;
                 }
                 else if (!arg.StartsWith("-", StringComparison.Ordinal))
                 {
@@ -72,10 +72,10 @@ namespace MsBuildCompileCommands.Cli
                 return 1;
             }
 
-            return GenerateFromBinlog(binlogPath, outputPath, merge);
+            return GenerateFromBinlog(binlogPath, outputPath, overwrite);
         }
 
-        private static int GenerateFromBinlog(string binlogPath, string outputPath, bool merge)
+        private static int GenerateFromBinlog(string binlogPath, string outputPath, bool overwrite)
         {
             Console.Error.WriteLine($"Reading {binlogPath}...");
 
@@ -84,10 +84,7 @@ namespace MsBuildCompileCommands.Cli
             try
             {
                 var reader = new BinLogReader();
-
-                // BinLogReader raises events as it replays the binlog
                 reader.AnyEventRaised += (sender, e) => collector.HandleEvent(e);
-
                 reader.Replay(binlogPath);
             }
             catch (Exception ex)
@@ -98,23 +95,11 @@ namespace MsBuildCompileCommands.Cli
 
             List<MsBuildCompileCommands.Core.Models.CompileCommand> commands = collector.GetCommands();
 
-            if (commands.Count == 0)
-            {
-                Console.Error.WriteLine("Warning: No C/C++ compilation steps found in the binlog.");
-                Console.Error.WriteLine("Ensure the build included cl.exe or clang-cl invocations.");
-
-                foreach (string diag in collector.Diagnostics)
-                {
-                    Console.Error.WriteLine($"  {diag}");
-                }
-                return 0;
-            }
-
             try
             {
                 string fullOutputPath = Path.GetFullPath(outputPath);
-                CompileCommandsWriter.Write(fullOutputPath, commands, merge);
-                Console.Error.WriteLine($"Wrote {commands.Count} entries to {fullOutputPath}");
+                CompileCommandsWriter.Write(fullOutputPath, commands, overwrite);
+                Console.Error.WriteLine($"Wrote {commands.Count} new entries to {fullOutputPath}");
             }
             catch (Exception ex)
             {
@@ -153,7 +138,7 @@ ARGUMENTS:
 
 OPTIONS:
     -o, --output <path>     Output file path (default: compile_commands.json)
-    --merge                 Merge with existing file instead of overwriting
+    --overwrite             Overwrite existing file instead of merging
     -h, --help              Show this help message
     --version               Show version
 
@@ -164,8 +149,8 @@ EXAMPLES:
     # Specify output path
     MsBuildCompileCommands build.binlog -o build/compile_commands.json
 
-    # Merge with existing database
-    MsBuildCompileCommands build.binlog --merge
+    # Overwrite instead of merging with existing database
+    MsBuildCompileCommands build.binlog --overwrite
 
     # Typical CMake + Visual Studio workflow
     cmake -B build -G ""Visual Studio 17 2022""
