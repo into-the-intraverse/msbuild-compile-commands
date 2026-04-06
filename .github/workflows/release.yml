@@ -76,8 +76,21 @@ jobs:
           echo "file=${FILE}" >> "$GITHUB_OUTPUT"
           echo "::notice::SHA256 for conan_data.yml: ${SHA}"
 
+      - name: Pack NuGet packages
+        run: |
+          dotnet pack src/logger/logger.csproj -c Release -o nupkg/ -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/cli/cli.csproj -c Release -o nupkg/ -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Push to NuGet.org
+        if: env.NUGET_API_KEY != ''
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push "nupkg/*.nupkg" --api-key ${{ env.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.sha256.outputs.file }}
+          files: |
+            ${{ steps.sha256.outputs.file }}
+            nupkg/*.nupkg
           generate_release_notes: true

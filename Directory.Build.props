@@ -11,7 +11,7 @@
     <Authors>MsBuildCompileCommands contributors</Authors>
     <RepositoryUrl>https://github.com/into-the-intraverse/msbuild-compile-commands</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/into-the-intraverse/msbuild-compile-commands</PackageProjectUrl>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>
