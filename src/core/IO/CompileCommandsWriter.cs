@@ -21,15 +21,17 @@ namespace MsBuildCompileCommands.Core.IO
         };
 
         /// <summary>
-        /// Write compile commands to a file. Overwrites the file by default.
-        /// When <paramref name="merge"/> is true, reads existing entries and merges
-        /// (new entries win on file-path conflict).
+        /// Write compile commands to a file. By default, merges with any existing file
+        /// (new entries win on file-path conflict) and prunes entries whose source files
+        /// no longer exist on disk.
+        /// When <paramref name="overwrite"/> is true, ignores the existing file and writes
+        /// only the provided commands (clean-slate mode).
         /// </summary>
-        public static void Write(string outputPath, IReadOnlyList<CompileCommand> commands, bool merge = false)
+        public static void Write(string outputPath, IReadOnlyList<CompileCommand> commands, bool overwrite = false)
         {
             List<CompileCommand> finalCommands;
 
-            if (merge && File.Exists(outputPath))
+            if (!overwrite && File.Exists(outputPath))
             {
                 var existing = Read(outputPath);
                 var merged = new Dictionary<string, CompileCommand>(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +47,12 @@ namespace MsBuildCompileCommands.Core.IO
             else
             {
                 finalCommands = new List<CompileCommand>(commands);
+            }
+
+            // Prune entries whose source files no longer exist on disk
+            if (!overwrite)
+            {
+                finalCommands.RemoveAll(cmd => !File.Exists(cmd.File));
             }
 
             // Sort for deterministic output

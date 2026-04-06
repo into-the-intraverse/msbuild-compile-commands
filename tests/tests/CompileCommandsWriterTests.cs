@@ -76,59 +76,67 @@ namespace MsBuildCompileCommands.Tests
         [Fact]
         public void Write_creates_file_on_disk()
         {
-            string tempFile = Path.Combine(Path.GetTempPath(), $"compile_commands_{Guid.NewGuid()}.json");
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string tempSource = Path.Combine(tempDir, "main.cpp");
+            File.WriteAllText(tempSource, "// test");
+            string tempOutput = Path.Combine(tempDir, "compile_commands.json");
 
             try
             {
                 var commands = new List<CompileCommand>
                 {
-                    new CompileCommand("C:/project", "C:/project/main.cpp", new[] { "cl.exe", "/c", "main.cpp" })
+                    new CompileCommand(tempDir, tempSource, new[] { "cl.exe", "/c", "main.cpp" })
                 };
 
-                CompileCommandsWriter.Write(tempFile, commands);
+                CompileCommandsWriter.Write(tempOutput, commands);
 
-                Assert.True(File.Exists(tempFile));
+                Assert.True(File.Exists(tempOutput));
 
-                string content = File.ReadAllText(tempFile);
+                string content = File.ReadAllText(tempOutput);
                 using var doc = JsonDocument.Parse(content);
                 Assert.Equal(1, doc.RootElement.GetArrayLength());
             }
             finally
             {
-                if (File.Exists(tempFile))
-                    File.Delete(tempFile);
+                Directory.Delete(tempDir, true);
             }
         }
 
         [Fact]
-        public void Write_with_merge_combines_entries()
+        public void Write_merges_with_existing_file_by_default()
         {
-            string tempFile = Path.Combine(Path.GetTempPath(), $"compile_commands_{Guid.NewGuid()}.json");
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string fileA = Path.Combine(tempDir, "a.cpp");
+            string fileB = Path.Combine(tempDir, "b.cpp");
+            string fileC = Path.Combine(tempDir, "c.cpp");
+            File.WriteAllText(fileA, "// a");
+            File.WriteAllText(fileB, "// b");
+            File.WriteAllText(fileC, "// c");
+            string output = Path.Combine(tempDir, "compile_commands.json");
 
             try
             {
-                // Write initial entries
                 var initial = new List<CompileCommand>
                 {
-                    new CompileCommand("C:/project", "C:/project/a.cpp", new[] { "cl.exe", "/c", "a.cpp" }),
-                    new CompileCommand("C:/project", "C:/project/b.cpp", new[] { "cl.exe", "/c", "b.cpp" })
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "a.cpp" }),
+                    new CompileCommand(tempDir, fileB, new[] { "cl.exe", "/c", "b.cpp" })
                 };
-                CompileCommandsWriter.Write(tempFile, initial);
+                CompileCommandsWriter.Write(output, initial);
 
-                // Merge new entries (c.cpp is new, a.cpp should be updated)
                 var updates = new List<CompileCommand>
                 {
-                    new CompileCommand("C:/project", "C:/project/a.cpp", new[] { "cl.exe", "/c", "/O2", "a.cpp" }),
-                    new CompileCommand("C:/project", "C:/project/c.cpp", new[] { "cl.exe", "/c", "c.cpp" })
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "/O2", "a.cpp" }),
+                    new CompileCommand(tempDir, fileC, new[] { "cl.exe", "/c", "c.cpp" })
                 };
-                CompileCommandsWriter.Write(tempFile, updates, merge: true);
+                CompileCommandsWriter.Write(output, updates);
 
-                string content = File.ReadAllText(tempFile);
+                string content = File.ReadAllText(output);
                 using var doc = JsonDocument.Parse(content);
 
                 Assert.Equal(3, doc.RootElement.GetArrayLength());
 
-                // Verify a.cpp was updated (has /O2)
                 foreach (JsonElement entry in doc.RootElement.EnumerateArray())
                 {
                     string? file = entry.GetProperty("file").GetString();
@@ -141,8 +149,7 @@ namespace MsBuildCompileCommands.Tests
             }
             finally
             {
-                if (File.Exists(tempFile))
-                    File.Delete(tempFile);
+                Directory.Delete(tempDir, true);
             }
         }
 
