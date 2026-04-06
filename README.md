@@ -254,9 +254,12 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 
 - The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
-- PCH: `/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header; the `.pch` file itself is not used
 - Custom MSBuild tasks that invoke compilers via `System.Diagnostics.Process` without logging, without standard task parameters, and without standard `ClCompile` items in the project file are not captured by any method
 - Generated source files are captured if they appear in the compiler command line, but the files must exist for clangd to use them
+
+### Precompiled headers
+
+`/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header. The `.pch` file itself is not used.
 
 ## Architecture
 
