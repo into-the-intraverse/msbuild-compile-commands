@@ -171,5 +171,177 @@ namespace MsBuildCompileCommands.Tests
             JsonElement entry = doc.RootElement[0];
             Assert.Equal("C:/Program Files/My Project", entry.GetProperty("directory").GetString());
         }
+
+        [Fact]
+        public void Write_incremental_merge_adds_new_entries()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string fileA = Path.Combine(tempDir, "a.cpp");
+            string fileB = Path.Combine(tempDir, "b.cpp");
+            string fileC = Path.Combine(tempDir, "c.cpp");
+            File.WriteAllText(fileA, "// a");
+            File.WriteAllText(fileB, "// b");
+            File.WriteAllText(fileC, "// c");
+            string output = Path.Combine(tempDir, "compile_commands.json");
+
+            try
+            {
+                // Clean build produces A, B
+                var initial = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "a.cpp" }),
+                    new CompileCommand(tempDir, fileB, new[] { "cl.exe", "/c", "b.cpp" })
+                };
+                CompileCommandsWriter.Write(output, initial);
+
+                // Incremental build only compiles C (new file)
+                var incremental = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileC, new[] { "cl.exe", "/c", "c.cpp" })
+                };
+                CompileCommandsWriter.Write(output, incremental);
+
+                string content = File.ReadAllText(output);
+                using var doc = JsonDocument.Parse(content);
+                Assert.Equal(3, doc.RootElement.GetArrayLength());
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void Write_prunes_entries_for_deleted_source_files()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string fileA = Path.Combine(tempDir, "a.cpp");
+            string fileB = Path.Combine(tempDir, "b.cpp");
+            File.WriteAllText(fileA, "// a");
+            File.WriteAllText(fileB, "// b");
+            string output = Path.Combine(tempDir, "compile_commands.json");
+
+            try
+            {
+                var initial = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "a.cpp" }),
+                    new CompileCommand(tempDir, fileB, new[] { "cl.exe", "/c", "b.cpp" })
+                };
+                CompileCommandsWriter.Write(output, initial);
+
+                // Delete file A from disk
+                File.Delete(fileA);
+
+                // Incremental build compiles nothing
+                CompileCommandsWriter.Write(output, new List<CompileCommand>());
+
+                string content = File.ReadAllText(output);
+                using var doc = JsonDocument.Parse(content);
+                Assert.Equal(1, doc.RootElement.GetArrayLength());
+                Assert.EndsWith("b.cpp", doc.RootElement[0].GetProperty("file").GetString());
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void Write_empty_commands_no_existing_file_writes_empty_array()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string output = Path.Combine(tempDir, "compile_commands.json");
+
+            try
+            {
+                CompileCommandsWriter.Write(output, new List<CompileCommand>());
+
+                Assert.True(File.Exists(output));
+                string content = File.ReadAllText(output);
+                using var doc = JsonDocument.Parse(content);
+                Assert.Equal(0, doc.RootElement.GetArrayLength());
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void Write_with_overwrite_ignores_existing_file()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string fileA = Path.Combine(tempDir, "a.cpp");
+            string fileB = Path.Combine(tempDir, "b.cpp");
+            string fileC = Path.Combine(tempDir, "c.cpp");
+            File.WriteAllText(fileA, "// a");
+            File.WriteAllText(fileB, "// b");
+            File.WriteAllText(fileC, "// c");
+            string output = Path.Combine(tempDir, "compile_commands.json");
+
+            try
+            {
+                var initial = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "a.cpp" }),
+                    new CompileCommand(tempDir, fileB, new[] { "cl.exe", "/c", "b.cpp" })
+                };
+                CompileCommandsWriter.Write(output, initial);
+
+                // Overwrite with only C
+                var overwriteCommands = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileC, new[] { "cl.exe", "/c", "c.cpp" })
+                };
+                CompileCommandsWriter.Write(output, overwriteCommands, overwrite: true);
+
+                string content = File.ReadAllText(output);
+                using var doc = JsonDocument.Parse(content);
+                Assert.Equal(1, doc.RootElement.GetArrayLength());
+                Assert.EndsWith("c.cpp", doc.RootElement[0].GetProperty("file").GetString());
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void Write_first_clean_build_writes_all_entries()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), $"msbcc_test_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempDir);
+            string fileA = Path.Combine(tempDir, "a.cpp");
+            string fileB = Path.Combine(tempDir, "b.cpp");
+            string fileC = Path.Combine(tempDir, "c.cpp");
+            File.WriteAllText(fileA, "// a");
+            File.WriteAllText(fileB, "// b");
+            File.WriteAllText(fileC, "// c");
+            string output = Path.Combine(tempDir, "compile_commands.json");
+
+            try
+            {
+                var commands = new List<CompileCommand>
+                {
+                    new CompileCommand(tempDir, fileA, new[] { "cl.exe", "/c", "a.cpp" }),
+                    new CompileCommand(tempDir, fileB, new[] { "cl.exe", "/c", "b.cpp" }),
+                    new CompileCommand(tempDir, fileC, new[] { "cl.exe", "/c", "c.cpp" })
+                };
+                CompileCommandsWriter.Write(output, commands);
+
+                string content = File.ReadAllText(output);
+                using var doc = JsonDocument.Parse(content);
+                Assert.Equal(3, doc.RootElement.GetArrayLength());
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
     }
 }
