@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.Build.Framework;
 using MsBuildCompileCommands.Core.Extraction;
 using MsBuildCompileCommands.Core.IO;
+using MsBuildCompileCommands.Core.Models;
 
 namespace MsBuildCompileCommands
 {
@@ -16,12 +18,16 @@ namespace MsBuildCompileCommands
     /// Parameters (semicolon-separated after the DLL path):
     ///   output=&lt;path&gt;       Output file path (default: compile_commands.json in the working directory)
     ///   overwrite=true|false  Overwrite existing file instead of merging (default: false)
+    ///   project=Name1,Name2   Include only these projects (comma-separated)
+    ///   configuration=Cfg     Include only these configurations (comma-separated)
     /// </summary>
     public sealed class Logger : ILogger
     {
         private CompileCommandCollector? _collector;
         private string _outputPath = "compile_commands.json";
         private bool _overwrite;
+        private string? _projectFilter;
+        private string? _configFilter;
 
         public LoggerVerbosity Verbosity { get; set; } = LoggerVerbosity.Normal;
 
@@ -31,7 +37,7 @@ namespace MsBuildCompileCommands
         {
             ParseParameters();
 
-            _collector = new CompileCommandCollector();
+            _collector = new CompileCommandCollector(BuildFilter());
 
             eventSource.MessageRaised += OnMessageRaised;
             eventSource.ProjectStarted += OnProjectStarted;
@@ -119,7 +125,42 @@ namespace MsBuildCompileCommands
                 {
                     _overwrite = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
                 }
+                else if (string.Equals(key, "project", StringComparison.OrdinalIgnoreCase))
+                {
+                    _projectFilter = value;
+                }
+                else if (string.Equals(key, "configuration", StringComparison.OrdinalIgnoreCase))
+                {
+                    _configFilter = value;
+                }
             }
+        }
+
+        private CompileCommandFilter? BuildFilter()
+        {
+            HashSet<string>? projects = ParseCommaSeparated(_projectFilter);
+            HashSet<string>? configurations = ParseCommaSeparated(_configFilter);
+
+            if (projects == null && configurations == null)
+                return null;
+
+            return new CompileCommandFilter(projects, configurations);
+        }
+
+        private static HashSet<string>? ParseCommaSeparated(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string item in value!.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string trimmed = item.Trim();
+                if (trimmed.Length > 0)
+                    set.Add(trimmed);
+            }
+
+            return set.Count > 0 ? set : null;
         }
     }
 }
