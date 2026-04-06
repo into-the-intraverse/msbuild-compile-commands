@@ -105,6 +105,8 @@ Logger parameters (semicolon-separated):
 - `overwrite=true` - Overwrite existing file instead of merging (default: merge with existing)
 - `project=Name1,Name2` - Include only these projects (comma-separated)
 - `configuration=Cfg` - Include only these configurations (comma-separated)
+- `flagrules=<path>` - Path to custom flag translation rules JSON (replaces built-in rules)
+- `translate=false` - Disable all flag translation
 
 ### Binlog replay (recommended for CI)
 
@@ -128,6 +130,9 @@ CLI options:
 - `--project <names>` - Include only these projects (comma-separated, matched by project name)
 - `--configuration <names>` - Include only these configurations (comma-separated)
 - `--evaluate` - After binlog replay, evaluate `.vcxproj` files to fill in source files not captured by build events (requires MSBuild installation)
+- `--flag-rules <path>` - Path to custom flag translation rules JSON (replaces built-in rules entirely)
+- `--no-translate` - Disable all flag translation (built-in and custom)
+- `--dump-rules` - Print built-in translation rules as JSON and exit
 - `--version` - Show version
 - `-h, --help` - Show help
 
@@ -208,18 +213,79 @@ Uses the `arguments` form (array of strings) rather than the `command` form (sin
     "file": "C:/project/src/main.cpp",
     "arguments": [
       "C:/Program Files/VS/VC/Tools/MSVC/14.38/bin/Hostx64/x64/cl.exe",
-      "/EHsc",
-      "/std:c++17",
-      "/IC:/project/include",
-      "/DWIN32",
-      "/c",
+      "-fexceptions",
+      "-std=c++17",
+      "-IC:/project/include",
+      "-DWIN32",
+      "-c",
       "C:/project/src/main.cpp"
     ]
   }
 ]
 ```
 
+With `--no-translate`, original MSVC flags are preserved:
+
+```json
+{
+  "arguments": ["cl.exe", "/EHsc", "/std:c++17", "/IC:/project/include", "/DWIN32", "/c", "..."]
+}
+```
+
 Paths are normalized to forward slashes with uppercase drive letters for consistency.
+
+## Flag translation
+
+By default, MSVC flags are translated to clang equivalents so clangd understands the output without extra configuration. This is on by default and can be disabled with `--no-translate` (CLI) or `translate=false` (logger).
+
+### What gets translated
+
+| MSVC | clang | Category |
+|------|-------|----------|
+| `/std:c++20` | `-std=c++20` | Language standard |
+| `/EHsc`, `/EHa`, `/EHs` | `-fexceptions` | Exceptions |
+| `/GR`, `/GR-` | `-frtti`, `-fno-rtti` | RTTI |
+| `/W0`–`/W4`, `/Wall` | `-w`, `-Wall`, `-Wextra`, `-Weverything` | Warning level |
+| `/WX`, `/WX-` | `-Werror`, `-Wno-error` | Warnings as errors |
+| `/D`, `/U`, `/I` | `-D`, `-U`, `-I` | Defines, undefines, includes |
+| `/FI` | `-include` | Forced includes |
+| `/external:I` | `-isystem` | System includes |
+| `/J` | `-funsigned-char` | Char signedness |
+| `/permissive-` | `-fno-ms-extensions` | Conformance |
+| `/c` | `-c` | Compile only |
+
+### What is NOT translated
+
+Optimization levels (`/O1`, `/O2`), code generation (`/arch:*`), debug info (`/Zi`), runtime library (`/MT`, `/MD`), and output paths (`/Fo`, `/Fd`) are not translated — they don't affect clangd's understanding of source code. Output paths are already stripped by the parsers.
+
+### Custom rules
+
+Export the built-in rules as a starting point, edit, and pass back:
+
+```bash
+# Export built-in rules
+msbuild-compile-commands --dump-rules > my-rules.json
+
+# Edit my-rules.json to add/remove/modify rules...
+
+# Use custom rules (replaces all built-ins)
+msbuild-compile-commands build.binlog --flag-rules my-rules.json
+```
+
+Rule format:
+
+```json
+[
+  { "when": "msvc", "from": "/EHsc", "to": "-fexceptions" },
+  { "when": "msvc", "from": "/D", "to": "-D", "prefix": true },
+  { "when": "nvcc", "from": "--expt-relaxed-constexpr", "to": null }
+]
+```
+
+- `when` — `"msvc"`, `"gcc-clang"`, `"nvcc"`, or omitted for all compilers
+- `from` — flag to match (exact or prefix)
+- `to` — replacement (space-separated for multi-arg), `null` to drop the flag
+- `prefix` — `true` to match start of argument and preserve the suffix (e.g., `/DFOO` → `-DFOO`)
 
 ## What gets captured
 
@@ -273,6 +339,7 @@ MsBuildCompileCommands.Core (netstandard2.0)
   Extraction/GccClangCommandParser gcc/g++/clang/clang++ argument parser
   Extraction/NvccCommandParser    nvcc argument parser (host flag extraction)
   Extraction/CommandLineTokenizer Windows command line tokenizer
+  Extraction/FlagTranslator        Translates compiler flags using rules
   Extraction/CompileCommandCollector  MSBuild event processor
   Extraction/ITaskMapper          Task parameter → CompileCommand mapper interface
   Extraction/TaskMapperRegistry   Dispatches to known + fallback mappers
@@ -280,6 +347,7 @@ MsBuildCompileCommands.Core (netstandard2.0)
   Extraction/CudaCompileTaskMapper Maps CudaCompile task parameters
   Extraction/GenericTaskMapper    Best-effort fallback for unknown tasks
   IO/ResponseFileParser           @response-file expansion
+  IO/TranslationRuleLoader        JSON rule loading/serialization
   IO/CompileCommandsWriter        JSON output
   Utils/PathNormalizer            Path normalization
 
@@ -304,7 +372,6 @@ dotnet build -c Release
 
 ## Roadmap
 
-- [ ] Custom flag translation rules
 - [ ] ETW-based process tracing for compilers invoked without MSBuild events
 - [ ] Linux/macOS support for offline binlog parsing
 
