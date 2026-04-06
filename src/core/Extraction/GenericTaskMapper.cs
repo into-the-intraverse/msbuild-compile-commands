@@ -99,7 +99,7 @@ namespace MsBuildCompileCommands.Core.Extraction
                 string normalizedFile = PathNormalizer.Normalize(source, directory);
                 var args = new List<string>(flags);
                 args.Add(normalizedFile);
-                results.Add(new CompileCommand(normalizedDir, normalizedFile, args));
+                results.Add(new CompileCommand(normalizedDir, normalizedFile, args, ParserKind.Unknown));
             }
 
             return results;

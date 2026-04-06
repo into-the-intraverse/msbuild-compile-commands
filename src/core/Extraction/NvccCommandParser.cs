@@ -186,7 +186,7 @@ namespace MsBuildCompileCommands.Core.Extraction
                     args.Add("-c");
                 args.Add(normalizedFile);
 
-                commands.Add(new CompileCommand(normalizedDir, normalizedFile, args));
+                commands.Add(new CompileCommand(normalizedDir, normalizedFile, args, ParserKind.Nvcc));
             }
 
             return commands;
