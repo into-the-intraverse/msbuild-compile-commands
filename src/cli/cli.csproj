@@ -5,6 +5,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Build" Version="17.11.4" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
     <PackageReference Include="MSBuild.StructuredLogger" Version="2.3.154" />
   </ItemGroup>
 
@@ -15,6 +17,9 @@
     <RootNamespace>MsBuildCompileCommands.Cli</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- NU1903: Microsoft.Build 17.11.4 has a known vulnerability but we use ExcludeAssets="runtime"
+         so the vulnerable DLL is never shipped — it comes from the installed VS/SDK at runtime. -->
+    <NoWarn>NU1903</NoWarn>
   </PropertyGroup>
 
   <!-- dotnet tool packaging -->

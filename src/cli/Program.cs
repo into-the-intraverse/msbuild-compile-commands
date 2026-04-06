@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Logging.StructuredLogger;
+using MsBuildCompileCommands.Cli.Evaluation;
 using MsBuildCompileCommands.Core.Extraction;
 using MsBuildCompileCommands.Core.IO;
 using MsBuildCompileCommands.Core.Models;
@@ -20,6 +21,9 @@ namespace MsBuildCompileCommands.Cli
 
         private static int Main(string[] args)
         {
+            try { Microsoft.Build.Locator.MSBuildLocator.RegisterDefaults(); }
+            catch (Exception) { /* MSBuild not found — --evaluate will fail gracefully later */ }
+
             if (args.Length == 0 || HasFlag(args, "--help") || HasFlag(args, "-h"))
             {
                 PrintUsage();
@@ -37,6 +41,7 @@ namespace MsBuildCompileCommands.Cli
             bool overwrite = false;
             string? projectFilter = null;
             string? configFilter = null;
+            bool evaluate = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -85,6 +90,10 @@ namespace MsBuildCompileCommands.Cli
                 {
                     configFilter = arg.Substring("--configuration=".Length);
                 }
+                else if (string.Equals(arg, "--evaluate", StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluate = true;
+                }
                 else if (!arg.StartsWith("-", StringComparison.Ordinal))
                 {
                     binlogPath = arg;
@@ -108,11 +117,11 @@ namespace MsBuildCompileCommands.Cli
                 return 1;
             }
 
-            return GenerateFromBinlog(binlogPath, outputPath, overwrite, projectFilter, configFilter);
+            return GenerateFromBinlog(binlogPath, outputPath, overwrite, projectFilter, configFilter, evaluate);
         }
 
         private static int GenerateFromBinlog(string binlogPath, string outputPath, bool overwrite,
-            string? projectFilter, string? configFilter)
+            string? projectFilter, string? configFilter, bool evaluate)
         {
             Console.Error.WriteLine($"Reading {binlogPath}...");
 
@@ -132,6 +141,50 @@ namespace MsBuildCompileCommands.Cli
             }
 
             List<MsBuildCompileCommands.Core.Models.CompileCommand> commands = collector.GetCommands();
+
+            if (evaluate)
+            {
+                var capturedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (CompileCommand cmd in commands)
+                    capturedFiles.Add(cmd.DeduplicationKey);
+
+                var evaluator = new ProjectEvaluator();
+                List<string> projectPaths = collector.GetProjectPaths();
+                int evalCount = 0;
+
+                foreach (string projectPath in projectPaths)
+                {
+                    if (!File.Exists(projectPath))
+                    {
+                        Console.Error.WriteLine($"  Warning: project file not found for evaluation: {projectPath}");
+                        continue;
+                    }
+
+                    // Pass first configuration from filter, if any
+                    string? config = null;
+                    if (configFilter != null)
+                    {
+                        string[] parts = configFilter.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 0) config = parts[0].Trim();
+                    }
+
+                    List<CompileCommand> evalCommands = evaluator.Evaluate(projectPath, config);
+                    foreach (CompileCommand cmd in evalCommands)
+                    {
+                        if (capturedFiles.Add(cmd.DeduplicationKey))
+                        {
+                            commands.Add(cmd);
+                            evalCount++;
+                        }
+                    }
+                }
+
+                if (evalCount > 0)
+                    Console.Error.WriteLine($"  Evaluation added {evalCount} entries not captured by build events");
+
+                foreach (string diag in evaluator.Diagnostics)
+                    Console.Error.WriteLine($"  {diag}");
+            }
 
             try
             {
@@ -206,6 +259,8 @@ OPTIONS:
     --overwrite             Overwrite existing file instead of merging
     --project <names>       Include only these projects (comma-separated, matched by name)
     --configuration <names> Include only these configurations (comma-separated)
+    --evaluate              After binlog replay, evaluate .vcxproj files to fill in
+                            source files not captured by build events
     -h, --help              Show this help message
     --version               Show version
 
