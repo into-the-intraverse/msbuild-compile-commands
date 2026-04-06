@@ -1,0 +1,253 @@
+# MsBuildCompileCommands
+
+Generate `compile_commands.json` from MSBuild-based C/C++ builds for use with [clangd](https://clangd.llvm.org/) and other clang tooling.
+
+## Problem
+
+Windows C++ projects using CMake with Visual Studio generators cannot use `CMAKE_EXPORT_COMPILE_COMMANDS` (it only works with Makefile and Ninja generators) ot generate a compilation database used for clangd, clang-tidy, and similar tools.
+
+**MsBuildCompileCommands** fills this gap by extracting compile commands directly from MSBuild logs, either live during a build or offline from a binary log.
+
+## What it allows you to do
+
+- Get clangd IntelliSense in any MSBuild-based C++ project
+- Use CMake + Visual Studio generator with full clangd support
+- Integrate Conan 2 + CMake + MSBuild workflows with clang tooling
+- Generate compilation databases in CI pipelines
+- Run clang-tidy, include-what-you-use, and other clang tools on MSBuild projects
+
+## Two modes of operation
+
+| Mode | How it works | When to use |
+|------|-------------|-------------|
+| **Live logger** | Attaches to MSBuild as a logger; generates `compile_commands.json` at the end of the build | Normal development workflow |
+| **Binlog replay** | Reads an existing `.binlog` file and extracts compile commands offline | CI, post-hoc analysis, when you don't want to modify the build invocation |
+
+Both modes use the same extraction core and produce identical output.
+
+## Installation
+
+### Build from source
+
+Requires .NET 8 SDK or later.
+
+```bash
+git clone https://github.com/example/msbuild-compile-commands.git
+cd msbuild-compile-commands
+dotnet build -c Release
+```
+
+Outputs:
+- **Logger DLL**: `bin/logger/MsBuildCompileCommands.dll`
+- **CLI tool**: `bin/cli/MsBuildCompileCommands.exe`
+
+## Usage
+
+### Live logger (recommended for development)
+
+Attach the logger to any MSBuild invocation:
+
+```bash
+msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompileCommands.dll
+```
+
+With options:
+
+```bash
+msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompileCommands.dll;output=build/compile_commands.json;merge=true
+```
+
+Logger parameters (semicolon-separated):
+- `output=<path>` - Output file path (default: `compile_commands.json`)
+- `merge=true` - Merge with existing file instead of overwriting
+
+### Binlog replay (recommended for CI)
+
+First, build with binary logging enabled:
+
+```bash
+msbuild MyProject.sln /bl:build.binlog
+```
+
+Then extract compile commands:
+
+```bash
+MsBuildCompileCommands build.binlog
+MsBuildCompileCommands build.binlog -o compile_commands.json
+MsBuildCompileCommands build.binlog --merge
+```
+
+CLI options:
+- `-o, --output <path>` - Output file path (default: `compile_commands.json`)
+- `--merge` - Merge with existing file
+- `--version` - Show version
+- `-h, --help` - Show help
+
+## Workflow examples
+
+### CMake + Visual Studio generator
+
+```bash
+# Configure with Visual Studio generator
+cmake -B build -G "Visual Studio 17 2022"
+
+# Build with binary logging
+cmake --build build --config Release -- /bl:build.binlog
+
+# Generate compile_commands.json
+MsBuildCompileCommands build.binlog -o compile_commands.json
+```
+
+Or with the live logger:
+
+```bash
+cmake -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release -- -logger:path\to\MsBuildCompileCommands.dll
+```
+
+### Conan 2 + CMake + MSBuild
+
+```bash
+# Install dependencies
+conan install . --output-folder=build --build=missing
+
+# Configure
+cmake --preset conan-default
+
+# Build with binlog
+cmake --build --preset conan-release -- /bl:build.binlog
+
+# Generate database
+MsBuildCompileCommands build.binlog -o compile_commands.json
+```
+
+### MSBuild only (no CMake)
+
+```bash
+# Live logger
+msbuild MyProject.vcxproj -logger:path\to\MsBuildCompileCommands.dll
+
+# Or via binlog
+msbuild MyProject.vcxproj /bl
+MsBuildCompileCommands msbuild.binlog
+```
+
+### clangd configuration
+
+After generating `compile_commands.json`, create or update `.clangd` in your project root:
+
+```yaml
+CompileFlags:
+  CompilationDatabase: .
+```
+
+If `compile_commands.json` is in a subdirectory:
+
+```yaml
+CompileFlags:
+  CompilationDatabase: build
+```
+
+## Output format
+
+Uses the `arguments` form (array of strings) rather than the `command` form (single string). This is more robust for Windows paths with spaces and avoids shell escaping issues.
+
+```json
+[
+  {
+    "directory": "C:/project/build",
+    "file": "C:/project/src/main.cpp",
+    "arguments": [
+      "C:/Program Files/VS/VC/Tools/MSVC/14.38/bin/Hostx64/x64/cl.exe",
+      "/EHsc",
+      "/std:c++17",
+      "/IC:/project/include",
+      "/DWIN32",
+      "/c",
+      "C:/project/src/main.cpp"
+    ]
+  }
+]
+```
+
+Paths are normalized to forward slashes with uppercase drive letters for consistency.
+
+## What gets captured
+
+- Include directories (`/I`, `/external:I`, `-I`, `-isystem`, `-imsvc`)
+- Preprocessor defines (`/D`, `-D`)
+- Undefines (`/U`, `-U`)
+- Forced includes (`/FI`, `-include`)
+- Language standard (`/std:c++17`, `-std=c++17`, etc.)
+- Exception handling (`/EHsc`, `/EHa`)
+- RTTI (`/GR`, `/GR-`)
+- Warning flags (`/W0-4`, `/WX`, `/Wall`, `/wdNNNN`)
+- Conformance flags (`/Zc:*`, `/permissive-`)
+- Character set flags (`/utf-8`, `/source-charset:*`)
+- Treat-as-language flags (`/TP`, `/TC`, `/Tp`, `/Tc`)
+- Other compilation flags
+
+## What gets excluded
+
+- Output path flags (`/Fo`, `/Fe`, `/Fd`, `/Fa`, `/Fp`, etc.)
+- Cosmetic flags (`/nologo`, `/showIncludes`)
+- Linker invocations (automatically filtered)
+
+## Supported compilers
+
+- **cl.exe** (MSVC) - primary target
+- **clang-cl** - supported when invoked through MSBuild
+
+## Limitations
+
+- Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
+- Response file expansion requires the response files to exist on disk at parse time
+- PCH flags (`/Yu`, `/Yc`) are passed through but may cause clangd warnings
+- Does not handle custom MSBuild tasks that invoke compilers through non-standard mechanisms
+- Path normalization assumes Windows drive-letter paths
+- No support for cross-compilation scenarios in v0.1
+- Generated source files are captured if they appear in the cl.exe command line, but the files must exist for clangd to use them
+
+## Architecture
+
+```
+MsBuildCompileCommands.Core (netstandard2.0)
+  Models/CompileCommand           Compile entry model
+  Extraction/CommandLineTokenizer Windows command line tokenizer
+  Extraction/ClCommandParser      cl.exe/clang-cl argument parser
+  Extraction/CompileCommandCollector  MSBuild event processor
+  IO/ResponseFileParser           @response-file expansion
+  IO/CompileCommandsWriter        JSON output
+  Utils/PathNormalizer            Path normalization
+
+MsBuildCompileCommands (netstandard2.0, logger)
+  Logger                          ILogger implementation for live builds
+
+MsBuildCompileCommands (net8.0, CLI)
+  Program                         Binlog replay CLI
+```
+
+The core library targets `netstandard2.0` for compatibility with both .NET Framework MSBuild (Visual Studio) and .NET SDK MSBuild.
+
+## Building
+
+```bash
+dotnet build
+dotnet test
+dotnet build -c Release
+```
+
+## Roadmap
+
+- [ ] NuGet package for the logger
+- [ ] `dotnet tool` packaging for the CLI
+- [ ] Filter by project/configuration
+- [ ] Custom flag translation rules
+- [ ] PCH-aware entry generation
+- [ ] Support for CUDA nvcc through MSBuild
+- [ ] Linux/macOS support for offline binlog parsing
+
+## License
+
+[MIT](LICENSE)
+
