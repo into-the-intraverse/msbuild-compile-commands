@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Publish CLI (framework-dependent, win-x64)
+        run: >
+          dotnet publish src/cli/cli.csproj
+          --configuration Release
+          --runtime win-x64
+          --no-self-contained
+          --output publish/cli
+
+      - name: Build Logger
+        run: >
+          dotnet build src/logger/logger.csproj
+          --configuration Release
+          --output publish/logger
+
+      - name: Assemble release archive
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          STAGING="staging/MsBuildCompileCommands-${VERSION}-win-x64"
+          mkdir -p "${STAGING}"
+
+          # CLI: full publish tree minus PDBs
+          cp -r publish/cli "${STAGING}/cli"
+          find "${STAGING}/cli" -name "*.pdb" -delete
+
+          # Logger: only the two managed DLLs
+          mkdir -p "${STAGING}/logger"
+          cp publish/logger/MsBuildCompileCommands.dll "${STAGING}/logger/"
+          cp publish/logger/MsBuildCompileCommands.Core.dll "${STAGING}/logger/"
+
+          # License (required for conan-center-index)
+          cp LICENSE "${STAGING}/"
+
+          cd staging
+          7z a "../MsBuildCompileCommands-${VERSION}-win-x64.zip" \
+            "MsBuildCompileCommands-${VERSION}-win-x64/"
+
+      - name: Compute SHA256
+        id: sha256
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          FILE="MsBuildCompileCommands-${VERSION}-win-x64.zip"
+          SHA=$(sha256sum "$FILE" | cut -d' ' -f1)
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "file=${FILE}" >> "$GITHUB_OUTPUT"
+          echo "::notice::SHA256 for conan_data.yml: ${SHA}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.sha256.outputs.file }}
+          generate_release_notes: true
