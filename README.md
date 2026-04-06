@@ -8,6 +8,17 @@ Windows C++ projects using CMake with Visual Studio generators cannot use `CMAKE
 
 **MsBuildCompileCommands** fills this gap by extracting compile commands directly from MSBuild logs, either live during a build or offline from a binary log.
 
+## ℹ️ TODO
+
+- [ ] ETW-based process tracing for compilers invoked without MSBuild events
+- [ ] Linux/macOS support for offline binlog parsing
+- [ ] First build must be a clean build to populate `compile_commands.json` (incremental builds merge/prune automatically after that)
+- [ ] Response file expansion requires files on disk at parse time (warning emitted when replaying `.binlog` after temp files are cleaned)
+- [ ] Custom MSBuild tasks invoking compilers via `Process` without logging or standard task parameters are not captured
+- [ ] Generated source files are captured but must exist on disk for clangd to use them
+- [ ] Flag translation covers semantic flags only — optimization, codegen, debug info, and runtime library flags pass through untranslated
+- [ ] `/Yc` (create PCH) is stripped, `/Yu` (use PCH) is converted to `/FI` — the `.pch` file itself is not used
+
 ## What it allows you to do
 
 - Get clangd IntelliSense in any MSBuild-based C++ project
@@ -254,10 +265,6 @@ By default, MSVC flags are translated to clang equivalents so clangd understands
 | `/permissive-` | `-fno-ms-extensions` | Conformance |
 | `/c` | `-c` | Compile only |
 
-### What is NOT translated
-
-Optimization levels (`/O1`, `/O2`), code generation (`/arch:*`), debug info (`/Zi`), runtime library (`/MT`, `/MD`), and output paths (`/Fo`, `/Fd`) are not translated — they don't affect clangd's understanding of source code. Output paths are already stripped by the parsers.
-
 ### Custom rules
 
 Export the built-in rules as a starting point, edit, and pass back:
@@ -316,17 +323,6 @@ Rule format:
 - **clang / clang++** - LLVM Clang (native mode, not clang-cl)
 - **nvcc** - NVIDIA CUDA compiler (extracts host compiler flags via `-Xcompiler`/`--compiler-options`)
 
-## Limitations
-
-- The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
-- Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
-- Custom MSBuild tasks that invoke compilers via `System.Diagnostics.Process` without logging, without standard task parameters, and without standard `ClCompile` items in the project file are not captured by any method
-- Generated source files are captured if they appear in the compiler command line, but the files must exist for clangd to use them
-
-### Precompiled headers
-
-`/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header. The `.pch` file itself is not used.
-
 ## Architecture
 
 ```
@@ -369,11 +365,6 @@ dotnet build
 dotnet test
 dotnet build -c Release
 ```
-
-## Roadmap
-
-- [ ] ETW-based process tracing for compilers invoked without MSBuild events
-- [ ] Linux/macOS support for offline binlog parsing
 
 ## License
 
