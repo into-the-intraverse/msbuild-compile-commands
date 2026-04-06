@@ -54,12 +54,12 @@ msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompi
 With options:
 
 ```bash
-msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompileCommands.dll;output=build/compile_commands.json;merge=true
+msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompileCommands.dll;output=build/compile_commands.json;overwrite=true
 ```
 
 Logger parameters (semicolon-separated):
 - `output=<path>` - Output file path (default: `compile_commands.json`)
-- `merge=true` - Merge with existing file instead of overwriting
+- `overwrite=true` - Overwrite existing file instead of merging (default: merge with existing)
 
 ### Binlog replay (recommended for CI)
 
@@ -74,12 +74,12 @@ Then extract compile commands:
 ```bash
 MsBuildCompileCommands build.binlog
 MsBuildCompileCommands build.binlog -o compile_commands.json
-MsBuildCompileCommands build.binlog --merge
+MsBuildCompileCommands build.binlog --overwrite
 ```
 
 CLI options:
 - `-o, --output <path>` - Output file path (default: `compile_commands.json`)
-- `--merge` - Merge with existing file
+- `--overwrite` - Overwrite existing file instead of merging (default: merge with existing)
 - `--version` - Show version
 - `-h, --help` - Show help
 
@@ -200,6 +200,7 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 
 ## Limitations
 
+- The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
 - Response file expansion requires the response files to exist on disk at parse time
 - PCH flags (`/Yu`, `/Yc`) are passed through but may cause clangd warnings
