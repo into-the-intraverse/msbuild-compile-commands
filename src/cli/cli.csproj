@@ -17,4 +17,18 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- dotnet tool packaging -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>msbuild-compile-commands</ToolCommandName>
+    <PackageId>MsBuildCompileCommands.Cli</PackageId>
+    <Description>CLI tool to generate compile_commands.json from MSBuild binary logs for clangd and clang tooling.</Description>
+    <PackageTags>clangd;compile-commands;msvc;msbuild;cpp;dotnet-tool</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
 </Project>

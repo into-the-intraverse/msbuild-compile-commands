@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Logging.StructuredLogger;
 using MsBuildCompileCommands.Core.Extraction;
@@ -10,7 +11,11 @@ namespace MsBuildCompileCommands.Cli
 {
     internal static class Program
     {
-        private const string Version = "0.1.1";
+        private static readonly string Version =
+            typeof(Program).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion?.Split('+')[0]
+            ?? "0.0.0";
 
         private static int Main(string[] args)
         {
