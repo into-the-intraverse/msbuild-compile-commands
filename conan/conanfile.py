@@ -47,19 +47,19 @@ class MsBuildCompileCommandsConan(ConanFile):
             )
 
     def build(self):
-        cli_out = os.path.join(self.build_folder, "publish", "cli")
-        logger_out = os.path.join(self.build_folder, "publish", "logger")
+        out = os.path.join(self.build_folder, "publish")
         self.run(
             "dotnet publish src/cli/cli.csproj"
             " --configuration Release"
             " --runtime win-x64"
             " --no-self-contained"
-            f" --output {cli_out}"
+            " /p:PublishSingleFile=true"
+            f" --output {out}"
         )
         self.run(
             "dotnet build src/logger/logger.csproj"
             " --configuration Release"
-            f" --output {logger_out}"
+            f" --output {out}"
         )
 
     def package(self):
@@ -68,12 +68,9 @@ class MsBuildCompileCommandsConan(ConanFile):
              src=self.source_folder,
              dst=os.path.join(self.package_folder, "licenses"))
         copy(self, "*",
-             src=os.path.join(publish, "cli"),
+             src=publish,
              dst=os.path.join(self.package_folder, "bin"),
              excludes=["*.pdb"])
-        copy(self, "*.dll",
-             src=os.path.join(publish, "logger"),
-             dst=os.path.join(self.package_folder, "logger"))
 
     def package_info(self):
         self.cpp_info.bindirs = ["bin"]
@@ -81,7 +78,7 @@ class MsBuildCompileCommandsConan(ConanFile):
         self.cpp_info.includedirs = []
 
         logger_dll = os.path.join(
-            self.package_folder, "logger", "MsBuildCompileCommands.dll"
+            self.package_folder, "bin", "MsBuildCompileCommands.dll"
         )
         self.buildenv_info.define(
             "MSBUILDCOMPILECOMMANDS_LOGGER_DLL", logger_dll

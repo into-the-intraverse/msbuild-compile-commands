@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\core\core.csproj" />
+    <Compile Include="..\core\**\*.cs" LinkBase="Core" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" Version="17.11.4" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -39,7 +40,6 @@
   <Target Name="_AddBuildOutputToPackage">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)MsBuildCompileCommands.dll" PackagePath="build\" />
-      <TfmSpecificPackageFile Include="$(OutputPath)MsBuildCompileCommands.Core.dll" PackagePath="build\" />
     </ItemGroup>
   </Target>
 

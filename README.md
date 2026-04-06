@@ -52,12 +52,30 @@ dotnet tool install -g MsBuildCompileCommands.Cli
 msbuild-compile-commands build.binlog
 ```
 
+### Conan 2
+
+Add as a tool requirement in your `conanfile.py`:
+
+```python
+def build_requirements(self):
+    self.tool_requires("msbuild-compile-commands/0.1.1")
+```
+
+Or in a Conan profile:
+
+```ini
+[tool_requires]
+msbuild-compile-commands/0.1.1
+```
+
+This puts `MsBuildCompileCommands.exe` on PATH and sets `MSBUILDCOMPILECOMMANDS_LOGGER_DLL` to the logger DLL path.
+
 ### Build from source
 
 Requires .NET 8 SDK or later.
 
 ```bash
-git clone https://github.com/example/msbuild-compile-commands.git
+git clone https://github.com/into-the-intraverse/msbuild-compile-commands.git
 cd msbuild-compile-commands
 dotnet build -c Release
 ```
@@ -133,17 +151,18 @@ cmake --build build --config Release -- -logger:path\to\MsBuildCompileCommands.d
 ### Conan 2 + CMake + MSBuild
 
 ```bash
-# Install dependencies
+# Install dependencies (with msbuild-compile-commands as tool_requires)
 conan install . --output-folder=build --build=missing
 
 # Configure
 cmake --preset conan-default
 
-# Build with binlog
+# Option A: binlog replay
 cmake --build --preset conan-release -- /bl:build.binlog
-
-# Generate database
 MsBuildCompileCommands build.binlog -o compile_commands.json
+
+# Option B: live logger (using env var set by the Conan package)
+cmake --build --preset conan-release -- -logger:MsBuildCompileCommands.Logger,%MSBUILDCOMPILECOMMANDS_LOGGER_DLL%
 ```
 
 ### MSBuild only (no CMake)

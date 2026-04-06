@@ -28,19 +28,20 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Publish CLI (framework-dependent, win-x64)
+      - name: Publish CLI (single-file, framework-dependent, win-x64)
         run: >
           dotnet publish src/cli/cli.csproj
           --configuration Release
           --runtime win-x64
           --no-self-contained
-          --output publish/cli
+          /p:PublishSingleFile=true
+          --output publish/bin
 
       - name: Build Logger
         run: >
           dotnet build src/logger/logger.csproj
           --configuration Release
-          --output publish/logger
+          --output publish/bin
 
       - name: Assemble release archive
         shell: bash
@@ -49,14 +50,9 @@ jobs:
           STAGING="staging/MsBuildCompileCommands-${VERSION}-win-x64"
           mkdir -p "${STAGING}"
 
-          # CLI: full publish tree minus PDBs
-          cp -r publish/cli "${STAGING}/cli"
-          find "${STAGING}/cli" -name "*.pdb" -delete
-
-          # Logger: only the two managed DLLs
-          mkdir -p "${STAGING}/logger"
-          cp publish/logger/MsBuildCompileCommands.dll "${STAGING}/logger/"
-          cp publish/logger/MsBuildCompileCommands.Core.dll "${STAGING}/logger/"
+          # Single folder: CLI exe (single-file) + logger DLL
+          cp -r publish/bin "${STAGING}/bin"
+          find "${STAGING}/bin" -name "*.pdb" -delete
 
           # License (required for conan-center-index)
           cp LICENSE "${STAGING}/"
