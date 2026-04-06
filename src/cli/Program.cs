@@ -6,6 +6,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Logging.StructuredLogger;
 using MsBuildCompileCommands.Core.Extraction;
 using MsBuildCompileCommands.Core.IO;
+using MsBuildCompileCommands.Core.Models;
 
 namespace MsBuildCompileCommands.Cli
 {
@@ -34,6 +35,8 @@ namespace MsBuildCompileCommands.Cli
             string? binlogPath = null;
             string outputPath = "compile_commands.json";
             bool overwrite = false;
+            string? projectFilter = null;
+            string? configFilter = null;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -53,6 +56,34 @@ namespace MsBuildCompileCommands.Cli
                 else if (string.Equals(arg, "--overwrite", StringComparison.OrdinalIgnoreCase))
                 {
                     overwrite = true;
+                }
+                else if (string.Equals(arg, "--project", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                        projectFilter = args[++i];
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --project requires a value.");
+                        return 1;
+                    }
+                }
+                else if (arg.StartsWith("--project=", StringComparison.OrdinalIgnoreCase))
+                {
+                    projectFilter = arg.Substring("--project=".Length);
+                }
+                else if (string.Equals(arg, "--configuration", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                        configFilter = args[++i];
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --configuration requires a value.");
+                        return 1;
+                    }
+                }
+                else if (arg.StartsWith("--configuration=", StringComparison.OrdinalIgnoreCase))
+                {
+                    configFilter = arg.Substring("--configuration=".Length);
                 }
                 else if (!arg.StartsWith("-", StringComparison.Ordinal))
                 {
@@ -77,14 +108,16 @@ namespace MsBuildCompileCommands.Cli
                 return 1;
             }
 
-            return GenerateFromBinlog(binlogPath, outputPath, overwrite);
+            return GenerateFromBinlog(binlogPath, outputPath, overwrite, projectFilter, configFilter);
         }
 
-        private static int GenerateFromBinlog(string binlogPath, string outputPath, bool overwrite)
+        private static int GenerateFromBinlog(string binlogPath, string outputPath, bool overwrite,
+            string? projectFilter, string? configFilter)
         {
             Console.Error.WriteLine($"Reading {binlogPath}...");
 
-            var collector = new CompileCommandCollector();
+            CompileCommandFilter? filter = BuildFilter(projectFilter, configFilter);
+            var collector = new CompileCommandCollector(filter);
 
             try
             {
@@ -130,6 +163,33 @@ namespace MsBuildCompileCommands.Cli
             return false;
         }
 
+        private static CompileCommandFilter? BuildFilter(string? projectFilter, string? configFilter)
+        {
+            HashSet<string>? projects = ParseCommaSeparated(projectFilter);
+            HashSet<string>? configurations = ParseCommaSeparated(configFilter);
+
+            if (projects == null && configurations == null)
+                return null;
+
+            return new CompileCommandFilter(projects, configurations);
+        }
+
+        private static HashSet<string>? ParseCommaSeparated(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string item in value.Split(','))
+            {
+                string trimmed = item.Trim();
+                if (trimmed.Length > 0)
+                    set.Add(trimmed);
+            }
+
+            return set.Count > 0 ? set : null;
+        }
+
         private static void PrintUsage()
         {
             Console.WriteLine($@"MsBuildCompileCommands {Version}
@@ -144,6 +204,8 @@ ARGUMENTS:
 OPTIONS:
     -o, --output <path>     Output file path (default: compile_commands.json)
     --overwrite             Overwrite existing file instead of merging
+    --project <names>       Include only these projects (comma-separated, matched by name)
+    --configuration <names> Include only these configurations (comma-separated)
     -h, --help              Show this help message
     --version               Show version
 
@@ -161,6 +223,12 @@ EXAMPLES:
     cmake -B build -G ""Visual Studio 17 2022""
     cmake --build build -- /bl:build.binlog
     MsBuildCompileCommands build.binlog -o compile_commands.json
+
+    # Filter by project
+    MsBuildCompileCommands build.binlog --project=MyApp,MyLib
+
+    # Filter by configuration
+    MsBuildCompileCommands build.binlog --configuration=Release
 
     # Live logger (no binlog needed)
     msbuild MyProject.sln /logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompileCommands.dll
