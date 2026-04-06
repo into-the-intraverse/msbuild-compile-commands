@@ -247,7 +247,7 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 - The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
 - Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
-- PCH flags (`/Yu`, `/Yc`) are passed through but may cause clangd warnings
+- PCH: `/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header; the `.pch` file itself is not used
 - Does not handle custom MSBuild tasks that invoke compilers through non-standard mechanisms
 - Path normalization assumes Windows drive-letter paths
 - No support for cross-compilation scenarios in v0.1
@@ -288,7 +288,7 @@ dotnet build -c Release
 - [x] `dotnet tool` packaging for the CLI
 - [ ] Filter by project/configuration
 - [ ] Custom flag translation rules
-- [ ] PCH-aware entry generation
+- [x] PCH-aware entry generation
 - [ ] Support for CUDA nvcc through MSBuild
 - [ ] Linux/macOS support for offline binlog parsing
 

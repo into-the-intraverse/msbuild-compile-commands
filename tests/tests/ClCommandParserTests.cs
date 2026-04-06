@@ -230,6 +230,69 @@ namespace MsBuildCompileCommands.Tests
         }
 
         [Fact]
+        public void Pch_create_flag_is_stripped()
+        {
+            string cmd = @"cl.exe /c /Ycstdafx.h /EHsc stdafx.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains("/Yc"));
+        }
+
+        [Fact]
+        public void Pch_use_flag_becomes_forced_include()
+        {
+            string cmd = @"cl.exe /c /Yustdafx.h /EHsc main.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.Contains("/FIstdafx.h", commands[0].Arguments);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains("/Yu"));
+        }
+
+        [Fact]
+        public void Pch_use_flag_quoted_header()
+        {
+            string cmd = @"cl.exe /c /Yu""pch.h"" /EHsc main.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.Contains("/FIpch.h", commands[0].Arguments);
+        }
+
+        [Fact]
+        public void Pch_use_flag_separate_form()
+        {
+            string cmd = @"cl.exe /c /Yu stdafx.h /EHsc main.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.Contains("/FIstdafx.h", commands[0].Arguments);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains("/Yu"));
+        }
+
+        [Fact]
+        public void Pch_create_flag_without_header_is_stripped()
+        {
+            string cmd = @"cl.exe /c /Yc /EHsc stdafx.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains("/Yc"));
+        }
+
+        [Fact]
+        public void Pch_use_flag_with_dash_prefix()
+        {
+            string cmd = @"cl.exe /c -Yustdafx.h /EHsc main.cpp";
+            List<CompileCommand> commands = _parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.Contains("/FIstdafx.h", commands[0].Arguments);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains("-Yu"));
+        }
+
+        [Fact]
         public void Realistic_cmake_command_line()
         {
             string cmd = @"C:\PROGRA~1\MICROS~2\2022\Professional\VC\Tools\MSVC\14.38.33130\bin\Hostx64\x64\cl.exe " +

@@ -107,6 +107,17 @@ namespace MsBuildCompileCommands.Core.Extraction
                     continue;
                 }
 
+                // PCH flags: /Yc creates the PCH (strip entirely), /Yu uses the PCH
+                // (convert to /FI forced-include so clangd sees the implicit header).
+                string? pchAction = GetPchAction(token);
+                if (pchAction != null)
+                {
+                    string? headerName = ExtractPchHeader(token, pchAction, ref i, tokens);
+                    if (pchAction == "Yu" && headerName != null)
+                        flags.Add("/FI" + headerName);
+                    continue;
+                }
+
                 if (IsFlag(token))
                 {
                     if (!ShouldExcludeFlag(token))
@@ -258,6 +269,43 @@ namespace MsBuildCompileCommands.Core.Extraction
                 || string.Equals(token, "-external:I", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(token, "-isystem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(token, "-imsvc", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Returns "Yc" or "Yu" if the token is a PCH flag, null otherwise.
+        /// </summary>
+        private static string? GetPchAction(string token)
+        {
+            foreach (string prefix in new[] { "/", "-" })
+            {
+                if (token.StartsWith(prefix + "Yc", StringComparison.Ordinal))
+                    return "Yc";
+                if (token.StartsWith(prefix + "Yu", StringComparison.Ordinal))
+                    return "Yu";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Extracts the header name from a /Yu or /Yc flag.
+        /// Handles joined form (/Yuheader.h) and separate form (/Yu header.h).
+        /// Advances <paramref name="index"/> past the separate value when consumed.
+        /// Returns null when no header name is present.
+        /// </summary>
+        private static string? ExtractPchHeader(string token, string action, ref int index, List<string> tokens)
+        {
+            // Strip leading / or -
+            string rest = token.Substring(token[0] == '/' || token[0] == '-' ? 1 : 0);
+
+            // Joined form: /Yuheader.h or /Yu"header.h"
+            if (rest.Length > action.Length)
+                return rest.Substring(action.Length).Trim('"');
+
+            // Separate form: /Yu header.h — next token is the value if it isn't another flag
+            if (index + 1 < tokens.Count && !IsFlag(tokens[index + 1]))
+                return tokens[++index].Trim('"');
+
+            return null;
         }
 
         private static string GetExtension(string path)
