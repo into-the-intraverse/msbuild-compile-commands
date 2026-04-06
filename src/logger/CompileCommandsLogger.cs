@@ -20,7 +20,9 @@ namespace MsBuildCompileCommands
     ///   overwrite=true|false  Overwrite existing file instead of merging (default: false)
     ///   project=Name1,Name2   Include only these projects (comma-separated)
     ///   configuration=Cfg     Include only these configurations (comma-separated)
-    /// </summary>
+    ///   flagrules=&lt;path&gt;       Path to custom flag translation rules JSON
+    ///   translate=false         Disable all flag translation
+    ///</summary>
     public sealed class Logger : ILogger
     {
         private CompileCommandCollector? _collector;
@@ -28,6 +30,8 @@ namespace MsBuildCompileCommands
         private bool _overwrite;
         private string? _projectFilter;
         private string? _configFilter;
+        private string? _flagRulesPath;
+        private bool _noTranslate;
 
         public LoggerVerbosity Verbosity { get; set; } = LoggerVerbosity.Normal;
 
@@ -37,7 +41,29 @@ namespace MsBuildCompileCommands
         {
             ParseParameters();
 
-            _collector = new CompileCommandCollector(BuildFilter());
+            FlagTranslator? translator = null;
+            if (!_noTranslate)
+            {
+                IReadOnlyList<TranslationRule> rules;
+                if (_flagRulesPath != null && System.IO.File.Exists(_flagRulesPath))
+                {
+                    try
+                    {
+                        rules = TranslationRuleLoader.Load(_flagRulesPath);
+                    }
+                    catch (Exception)
+                    {
+                        rules = TranslationRule.MsvcBuiltins();
+                    }
+                }
+                else
+                {
+                    rules = TranslationRule.MsvcBuiltins();
+                }
+                translator = new FlagTranslator(rules);
+            }
+
+            _collector = new CompileCommandCollector(BuildFilter(), translator);
 
             eventSource.MessageRaised += OnMessageRaised;
             eventSource.ProjectStarted += OnProjectStarted;
@@ -139,6 +165,14 @@ namespace MsBuildCompileCommands
                 else if (string.Equals(key, "configuration", StringComparison.OrdinalIgnoreCase))
                 {
                     _configFilter = value;
+                }
+                else if (string.Equals(key, "flagrules", StringComparison.OrdinalIgnoreCase))
+                {
+                    _flagRulesPath = value;
+                }
+                else if (string.Equals(key, "translate", StringComparison.OrdinalIgnoreCase))
+                {
+                    _noTranslate = string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
                 }
             }
         }
