@@ -125,7 +125,7 @@ namespace MsBuildCompileCommands.Tests
         public void Filter_by_project_includes_only_matching_projects()
         {
             var filter = new CompileCommandFilter(
-                projects: new System.Collections.Generic.HashSet<string> { "app" },
+                projects: new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) { "APP" },
                 configurations: null);
             var collector = new CompileCommandCollector(filter);
 
@@ -147,7 +147,7 @@ namespace MsBuildCompileCommands.Tests
         {
             var filter = new CompileCommandFilter(
                 projects: null,
-                configurations: new System.Collections.Generic.HashSet<string> { "Release" });
+                configurations: new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) { "release" });
             var collector = new CompileCommandCollector(filter);
 
             var projDebug = CreateProjectStartedEventWithConfig(@"C:\project\app.vcxproj", 1, "Debug");
@@ -167,8 +167,8 @@ namespace MsBuildCompileCommands.Tests
         public void Filter_by_project_and_configuration_requires_both_match()
         {
             var filter = new CompileCommandFilter(
-                projects: new System.Collections.Generic.HashSet<string> { "App" },
-                configurations: new System.Collections.Generic.HashSet<string> { "Release" });
+                projects: new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) { "app" },
+                configurations: new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) { "RELEASE" });
             var collector = new CompileCommandCollector(filter);
 
             var appDebug = CreateProjectStartedEventWithConfig(@"C:\src\App.vcxproj", 1, "Debug");
