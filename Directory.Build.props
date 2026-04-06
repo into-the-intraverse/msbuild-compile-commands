@@ -7,7 +7,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>MsBuildCompileCommands contributors</Authors>
     <RepositoryUrl>https://github.com/example/msbuild-compile-commands</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

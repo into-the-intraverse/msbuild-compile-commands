@@ -61,13 +61,7 @@ namespace MsBuildCompileCommands.Core.Extraction
             if (string.IsNullOrWhiteSpace(commandLine))
                 return false;
 
-            // Extract the first token (compiler path)
-            List<string> tokens = CommandLineTokenizer.Tokenize(commandLine);
-            if (tokens.Count == 0)
-                return false;
-
-            string compilerName = Path.GetFileName(tokens[0]);
-            return CompilerNames.Contains(compilerName);
+            return FindCompilerEnd(commandLine) >= 0;
         }
 
         /// <summary>
@@ -76,23 +70,23 @@ namespace MsBuildCompileCommands.Core.Extraction
         /// </summary>
         public List<CompileCommand> Parse(string commandLine, string directory)
         {
-            List<string> tokens = CommandLineTokenizer.Tokenize(commandLine);
-            if (tokens.Count == 0)
+            int compilerEnd = FindCompilerEnd(commandLine);
+            if (compilerEnd < 0)
                 return new List<CompileCommand>();
+
+            string compiler = commandLine.Substring(0, compilerEnd).Trim('"');
+            string rest = commandLine.Substring(compilerEnd).TrimStart();
+
+            List<string> tokens = CommandLineTokenizer.Tokenize(rest);
 
             // Expand response files
             tokens = _responseFileParser.Expand(tokens, directory);
-
-            string compiler = tokens[0];
-            string compilerName = Path.GetFileName(compiler);
-            if (!CompilerNames.Contains(compilerName))
-                return new List<CompileCommand>();
 
             // Collect flags and source files
             var flags = new List<string>();
             var sourceFiles = new List<string>();
 
-            for (int i = 1; i < tokens.Count; i++)
+            for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
 
@@ -156,6 +150,43 @@ namespace MsBuildCompileCommands.Core.Extraction
             }
 
             return commands;
+        }
+
+        /// <summary>
+        /// Finds the end position of the compiler executable in the raw command line.
+        /// Handles both quoted paths ("C:\Program Files\...\cl.exe") and unquoted paths
+        /// with spaces (C:\Program Files\...\CL.exe) that MSBuild emits.
+        /// Returns the index past the compiler name, or -1 if no compiler found.
+        /// </summary>
+        private static int FindCompilerEnd(string commandLine)
+        {
+            // Try each known compiler name (longest first to match clang-cl.exe before cl.exe)
+            string[] names = { "clang-cl.exe", "clang-cl", "cl.exe", "cl" };
+
+            foreach (string name in names)
+            {
+                int idx = 0;
+                while (idx < commandLine.Length)
+                {
+                    int pos = commandLine.IndexOf(name, idx, StringComparison.OrdinalIgnoreCase);
+                    if (pos < 0)
+                        break;
+
+                    int end = pos + name.Length;
+
+                    // Must be at end of string or followed by whitespace (not part of a longer path segment)
+                    bool atEnd = end >= commandLine.Length || commandLine[end] == ' ' || commandLine[end] == '\t';
+                    // Must be preceded by a path separator or start of string (not a substring of another word)
+                    bool atStart = pos == 0 || commandLine[pos - 1] == '\\' || commandLine[pos - 1] == '/' || commandLine[pos - 1] == '"';
+
+                    if (atEnd && atStart)
+                        return end;
+
+                    idx = end;
+                }
+            }
+
+            return -1;
         }
 
         private static bool IsFlag(string token)
