@@ -231,9 +231,12 @@ namespace MsBuildCompileCommands.Cli
                     List<CompileCommand> evalCommands = evaluator.Evaluate(projectPath, config);
                     foreach (CompileCommand cmd in evalCommands)
                     {
-                        if (capturedFiles.Add(cmd.DeduplicationKey))
+                        CompileCommand translated = translator != null
+                            ? translator.Translate(new CompileCommand(cmd.Directory, cmd.File, cmd.Arguments, ParserKind.Msvc))
+                            : cmd;
+                        if (capturedFiles.Add(translated.DeduplicationKey))
                         {
-                            commands.Add(cmd);
+                            commands.Add(translated);
                             evalCount++;
                         }
                     }

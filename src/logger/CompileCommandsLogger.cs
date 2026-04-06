@@ -45,15 +45,24 @@ namespace MsBuildCompileCommands
             if (!_noTranslate)
             {
                 IReadOnlyList<TranslationRule> rules;
-                if (_flagRulesPath != null && System.IO.File.Exists(_flagRulesPath))
+                if (_flagRulesPath != null)
                 {
-                    try
+                    if (!System.IO.File.Exists(_flagRulesPath))
                     {
-                        rules = TranslationRuleLoader.Load(_flagRulesPath);
-                    }
-                    catch (Exception)
-                    {
+                        Console.Error.WriteLine($"MsBuildCompileCommands: Warning: flag rules file not found: {_flagRulesPath}, using built-in rules");
                         rules = TranslationRule.MsvcBuiltins();
+                    }
+                    else
+                    {
+                        try
+                        {
+                            rules = TranslationRuleLoader.Load(_flagRulesPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"MsBuildCompileCommands: Warning: failed to load flag rules: {ex.Message}, using built-in rules");
+                            rules = TranslationRule.MsvcBuiltins();
+                        }
                     }
                 }
                 else
