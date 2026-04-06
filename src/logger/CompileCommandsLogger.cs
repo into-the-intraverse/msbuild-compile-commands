@@ -11,17 +11,17 @@ namespace MsBuildCompileCommands
     ///
     /// Usage:
     ///   msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,MsBuildCompileCommands.dll
-    ///   msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,MsBuildCompileCommands.dll;output=build/compile_commands.json;merge=true
+    ///   msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,MsBuildCompileCommands.dll;output=build/compile_commands.json;overwrite=true
     ///
     /// Parameters (semicolon-separated after the DLL path):
-    ///   output=&lt;path&gt;   Output file path (default: compile_commands.json in the working directory)
-    ///   merge=true|false  Merge with existing file instead of overwriting (default: false)
+    ///   output=&lt;path&gt;       Output file path (default: compile_commands.json in the working directory)
+    ///   overwrite=true|false  Overwrite existing file instead of merging (default: false)
     /// </summary>
     public sealed class Logger : ILogger
     {
         private CompileCommandCollector? _collector;
         private string _outputPath = "compile_commands.json";
-        private bool _merge;
+        private bool _overwrite;
 
         public LoggerVerbosity Verbosity { get; set; } = LoggerVerbosity.Normal;
 
@@ -65,22 +65,10 @@ namespace MsBuildCompileCommands
 
             var commands = _collector.GetCommands();
 
-            if (commands.Count == 0)
-            {
-                WriteMessage("MsBuildCompileCommands: No C/C++ compilation steps detected. " +
-                    "Ensure the build includes cl.exe or clang-cl invocations.", MessageImportance.High);
-
-                foreach (string diag in _collector.Diagnostics)
-                {
-                    WriteMessage($"MsBuildCompileCommands: {diag}", MessageImportance.Normal);
-                }
-                return;
-            }
-
             try
             {
                 string outputPath = Path.GetFullPath(_outputPath);
-                CompileCommandsWriter.Write(outputPath, commands, _merge);
+                CompileCommandsWriter.Write(outputPath, commands, _overwrite);
 
                 WriteMessage(
                     $"MsBuildCompileCommands: Wrote {commands.Count} entries to {outputPath}",
@@ -127,9 +115,9 @@ namespace MsBuildCompileCommands
                 {
                     _outputPath = value;
                 }
-                else if (string.Equals(key, "merge", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(key, "overwrite", StringComparison.OrdinalIgnoreCase))
                 {
-                    _merge = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+                    _overwrite = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
                 }
             }
         }
