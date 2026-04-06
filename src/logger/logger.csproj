@@ -1,11 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\core\core.csproj" />
+    <Compile Include="..\core\**\*.cs" LinkBase="Core" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" Version="17.11.4" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -13,5 +14,34 @@
     <AssemblyName>MsBuildCompileCommands</AssemblyName>
     <RootNamespace>MsBuildCompileCommands.Logger</RootNamespace>
   </PropertyGroup>
+
+  <!-- NuGet package configuration -->
+  <PropertyGroup>
+    <PackageId>MsBuildCompileCommands</PackageId>
+    <Description>Generate compile_commands.json from MSBuild builds for clangd and clang tooling. Attaches as an MSBuild logger to capture compiler invocations during the build.</Description>
+    <PackageTags>clangd;compile-commands;msvc;msbuild;cpp;intellisense</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Logger is a build tool loaded by MSBuild, not a library reference -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+
+    <!-- Hook into pack to include build output -->
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AddBuildOutputToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="build\MsBuildCompileCommands.props" Pack="true" PackagePath="build\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <Target Name="_AddBuildOutputToPackage">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)MsBuildCompileCommands.dll" PackagePath="build\" />
+      <TfmSpecificPackageFile Include="$(OutputPath)MsBuildCompileCommands.Core.dll" PackagePath="build\" />
+    </ItemGroup>
+  </Target>
 
 </Project>
