@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Build.Framework;
@@ -15,14 +16,22 @@ namespace MsBuildCompileCommands.Core.Extraction
         private readonly Dictionary<int, string> _projectDirectories = new Dictionary<int, string>();
         private readonly Dictionary<string, CompileCommand> _commands = new Dictionary<string, CompileCommand>(StringComparer.OrdinalIgnoreCase);
         private readonly ClCommandParser _parser;
+        private readonly CompileCommandFilter? _filter;
+        private readonly Dictionary<int, string> _projectNames = new Dictionary<int, string>();
+        private readonly Dictionary<int, string> _projectConfigurations = new Dictionary<int, string>();
 
         private readonly List<string> _diagnostics = new List<string>();
 
-        public CompileCommandCollector() : this(new ClCommandParser()) { }
+        public CompileCommandCollector() : this(new ClCommandParser(), null) { }
 
-        public CompileCommandCollector(ClCommandParser parser)
+        public CompileCommandCollector(CompileCommandFilter? filter) : this(new ClCommandParser(), filter) { }
+
+        public CompileCommandCollector(ClCommandParser parser) : this(parser, null) { }
+
+        public CompileCommandCollector(ClCommandParser parser, CompileCommandFilter? filter)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            _filter = filter;
         }
 
         /// <summary>Diagnostic messages emitted during processing.</summary>
@@ -70,6 +79,20 @@ namespace MsBuildCompileCommands.Core.Extraction
             if (contextId >= 0)
             {
                 _projectDirectories[contextId] = dir;
+                _projectNames[contextId] = Path.GetFileNameWithoutExtension(e.ProjectFile);
+
+                if (e.Properties != null)
+                {
+                    foreach (DictionaryEntry entry in e.Properties)
+                    {
+                        if (entry.Key is string key &&
+                            string.Equals(key, "Configuration", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _projectConfigurations[contextId] = entry.Value as string ?? "";
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -80,6 +103,9 @@ namespace MsBuildCompileCommands.Core.Extraction
                 return;
 
             if (!ClCommandParser.IsCompilerInvocation(commandLine))
+                return;
+
+            if (!PassesFilter(e.BuildEventContext))
                 return;
 
             string directory = ResolveDirectory(e.BuildEventContext);
@@ -103,6 +129,34 @@ namespace MsBuildCompileCommands.Core.Extraction
             {
                 _diagnostics.Add($"Error parsing command line: {ex.Message} | {Truncate(commandLine, 200)}");
             }
+        }
+
+        private bool PassesFilter(BuildEventContext? context)
+        {
+            if (_filter == null)
+                return true;
+
+            int contextId = context?.ProjectContextId ?? -1;
+
+            if (_filter.Projects != null)
+            {
+                if (contextId < 0 || !_projectNames.TryGetValue(contextId, out string? name) ||
+                    !_filter.Projects.Contains(name))
+                {
+                    return false;
+                }
+            }
+
+            if (_filter.Configurations != null)
+            {
+                if (contextId < 0 || !_projectConfigurations.TryGetValue(contextId, out string? config) ||
+                    !_filter.Configurations.Contains(config))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private string ResolveDirectory(BuildEventContext? context)
