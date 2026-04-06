@@ -27,6 +27,31 @@ Both modes use the same extraction core and produce identical output.
 
 ## Installation
 
+### NuGet package (logger)
+
+```bash
+dotnet add package MsBuildCompileCommands
+```
+
+The package installs the logger DLL into your NuGet cache. Use it with MSBuild:
+
+```bash
+# Find the logger DLL path (look under the global-packages path)
+dotnet nuget locals global-packages --list
+
+# Use the logger — replace <cache> and <version> with your actual paths
+msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,"<cache>/msbuildcompilecommands/<version>/build/MsBuildCompileCommands.dll"
+```
+
+The package also exports `$(MsBuildCompileCommandsLoggerPath)` for use in MSBuild targets and props files.
+
+### dotnet tool (CLI)
+
+```bash
+dotnet tool install -g MsBuildCompileCommands.Cli
+msbuild-compile-commands build.binlog
+```
+
 ### Build from source
 
 Requires .NET 8 SDK or later.
@@ -240,8 +265,8 @@ dotnet build -c Release
 
 ## Roadmap
 
-- [ ] NuGet package for the logger
-- [ ] `dotnet tool` packaging for the CLI
+- [x] NuGet package for the logger
+- [x] `dotnet tool` packaging for the CLI
 - [ ] Filter by project/configuration
 - [ ] Custom flag translation rules
 - [ ] PCH-aware entry generation
