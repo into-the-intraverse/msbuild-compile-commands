@@ -15,22 +15,17 @@ namespace MsBuildCompileCommands.Core.Extraction
     {
         private readonly Dictionary<int, string> _projectDirectories = new Dictionary<int, string>();
         private readonly Dictionary<string, CompileCommand> _commands = new Dictionary<string, CompileCommand>(StringComparer.OrdinalIgnoreCase);
-        private readonly MsvcCommandParser _parser;
         private readonly CompileCommandFilter? _filter;
         private readonly Dictionary<int, string> _projectNames = new Dictionary<int, string>();
         private readonly Dictionary<int, string> _projectConfigurations = new Dictionary<int, string>();
+        private readonly Dictionary<int, string> _projectFiles = new Dictionary<int, string>();
 
         private readonly List<string> _diagnostics = new List<string>();
 
-        public CompileCommandCollector() : this(new MsvcCommandParser(), null) { }
+        public CompileCommandCollector() : this(null) { }
 
-        public CompileCommandCollector(CompileCommandFilter? filter) : this(new MsvcCommandParser(), filter) { }
-
-        public CompileCommandCollector(MsvcCommandParser parser) : this(parser, null) { }
-
-        public CompileCommandCollector(MsvcCommandParser parser, CompileCommandFilter? filter)
+        public CompileCommandCollector(CompileCommandFilter? filter)
         {
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _filter = filter;
         }
 
@@ -80,6 +75,7 @@ namespace MsBuildCompileCommands.Core.Extraction
             {
                 _projectDirectories[contextId] = dir;
                 _projectNames[contextId] = Path.GetFileNameWithoutExtension(e.ProjectFile);
+                _projectFiles[contextId] = e.ProjectFile;
 
                 if (e.Properties != null)
                 {
@@ -102,7 +98,8 @@ namespace MsBuildCompileCommands.Core.Extraction
             if (string.IsNullOrWhiteSpace(commandLine))
                 return;
 
-            if (!MsvcCommandParser.IsCompilerInvocationStatic(commandLine))
+            ICommandParser? parser = CommandParserFactory.FindParser(commandLine);
+            if (parser == null)
                 return;
 
             if (!PassesFilter(e.BuildEventContext))
@@ -112,14 +109,11 @@ namespace MsBuildCompileCommands.Core.Extraction
 
             try
             {
-                List<CompileCommand> commands = _parser.Parse(commandLine, directory, _diagnostics);
-
+                List<CompileCommand> commands = parser.Parse(commandLine, directory, _diagnostics);
                 foreach (CompileCommand cmd in commands)
                 {
-                    // Last-wins deduplication by file path
                     _commands[cmd.DeduplicationKey] = cmd;
                 }
-
                 if (commands.Count == 0)
                 {
                     _diagnostics.Add($"Warning: compiler invocation produced no entries: {Truncate(commandLine, 200)}");
@@ -129,6 +123,19 @@ namespace MsBuildCompileCommands.Core.Extraction
             {
                 _diagnostics.Add($"Error parsing command line: {ex.Message} | {Truncate(commandLine, 200)}");
             }
+        }
+
+        public List<string> GetProjectPaths()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var paths = new List<string>();
+            foreach (string projectFile in _projectFiles.Values)
+            {
+                if (projectFile.EndsWith(".vcxproj", StringComparison.OrdinalIgnoreCase) && seen.Add(projectFile))
+                    paths.Add(projectFile);
+            }
+            paths.Sort(StringComparer.OrdinalIgnoreCase);
+            return paths;
         }
 
         private bool PassesFilter(BuildEventContext? context)

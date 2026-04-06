@@ -204,6 +204,33 @@ namespace MsBuildCompileCommands.Tests
             Assert.Equal(2, commands.Count);
         }
 
+        [Fact]
+        public void Collects_gcc_commands_via_factory()
+        {
+            var collector = new CompileCommandCollector();
+            var projectStarted = CreateProjectStartedEvent(@"C:\project\myapp.vcxproj", projectContextId: 1);
+            collector.HandleEvent(projectStarted);
+            var taskCmd = CreateTaskCommandLineEvent("gcc -c -Wall main.c", projectContextId: 1);
+            collector.HandleEvent(taskCmd);
+            List<CompileCommand> commands = collector.GetCommands();
+            Assert.Single(commands);
+            Assert.Contains("main.c", commands[0].File);
+            Assert.Contains("-Wall", commands[0].Arguments);
+        }
+
+        [Fact]
+        public void Collects_nvcc_commands_via_factory()
+        {
+            var collector = new CompileCommandCollector();
+            var projectStarted = CreateProjectStartedEvent(@"C:\project\cuda.vcxproj", projectContextId: 1);
+            collector.HandleEvent(projectStarted);
+            var taskCmd = CreateTaskCommandLineEvent("nvcc -c -I/usr/include kernel.cu", projectContextId: 1);
+            collector.HandleEvent(taskCmd);
+            List<CompileCommand> commands = collector.GetCommands();
+            Assert.Single(commands);
+            Assert.Contains("kernel.cu", commands[0].File);
+        }
+
         // --- Helper methods to create MSBuild event instances ---
 
         private static ProjectStartedEventArgs CreateProjectStartedEvent(string projectFile, int projectContextId)
