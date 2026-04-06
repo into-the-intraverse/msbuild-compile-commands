@@ -248,11 +248,11 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 
 ## Limitations
 
-- The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
-- Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
+- Only captures cl.exe / clang-cl invocations; other compilers (gcc, clang, nvcc) are not yet recognized
+- Custom MSBuild tasks that invoke compilers without logging command lines produce no output
 - Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
-- Does not handle custom MSBuild tasks that invoke compilers through non-standard mechanisms
 - Path normalization assumes Windows drive-letter paths
+- The first build should be a full build to populate `compile_commands.json`; subsequent incremental builds merge new entries and prune deleted files automatically
 - Generated source files are captured if they appear in the cl.exe command line, but the files must exist for clangd to use them
 
 ## Architecture
@@ -287,9 +287,10 @@ dotnet build -c Release
 
 ## Roadmap
 
-- [ ] Custom flag translation rules
-- [ ] Support for CUDA nvcc through MSBuild
-- [ ] Linux/macOS support for offline binlog parsing
+- [x] Filter by project name and build configuration
+- [ ] Multi-compiler support (gcc, g++, clang, clang++, nvcc) — [design spec](docs/superpowers/specs/2026-04-06-custom-msbuild-multi-compiler-design.md)
+- [ ] Task parameter extraction for custom MSBuild tasks that don't log command lines
+- [ ] Project evaluation mode (`--evaluate`) to read `ClCompile` items directly from `.vcxproj` files
 
 ## License
 
