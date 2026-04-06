@@ -22,6 +22,7 @@ namespace MsBuildCompileCommands.Core.Extraction
         private readonly TaskMapperRegistry _taskMapperRegistry = new TaskMapperRegistry();
         private readonly Dictionary<int, TaskState> _activeTasks = new Dictionary<int, TaskState>();
 
+        private readonly FlagTranslator? _translator;
         private readonly List<string> _diagnostics = new List<string>();
 
         private sealed class TaskState
@@ -32,11 +33,14 @@ namespace MsBuildCompileCommands.Core.Extraction
             public TaskState(string taskName) { TaskName = taskName; }
         }
 
-        public CompileCommandCollector() : this(null) { }
+        public CompileCommandCollector() : this(null, null) { }
 
-        public CompileCommandCollector(CompileCommandFilter? filter)
+        public CompileCommandCollector(CompileCommandFilter? filter) : this(filter, null) { }
+
+        public CompileCommandCollector(CompileCommandFilter? filter, FlagTranslator? translator)
         {
             _filter = filter;
+            _translator = translator;
         }
 
         /// <summary>Diagnostic messages emitted during processing.</summary>
@@ -108,8 +112,9 @@ namespace MsBuildCompileCommands.Core.Extraction
                 List<CompileCommand> commands = _taskMapperRegistry.TryMap(state.TaskName, state.Parameters, directory);
                 foreach (CompileCommand cmd in commands)
                 {
-                    if (!_commands.ContainsKey(cmd.DeduplicationKey))
-                        _commands[cmd.DeduplicationKey] = cmd;
+                    CompileCommand final = _translator != null ? _translator.Translate(cmd) : cmd;
+                    if (!_commands.ContainsKey(final.DeduplicationKey))
+                        _commands[final.DeduplicationKey] = final;
                 }
             }
             catch (Exception ex)
@@ -214,7 +219,8 @@ namespace MsBuildCompileCommands.Core.Extraction
                 List<CompileCommand> commands = parser.Parse(commandLine, directory, _diagnostics);
                 foreach (CompileCommand cmd in commands)
                 {
-                    _commands[cmd.DeduplicationKey] = cmd;
+                    CompileCommand final = _translator != null ? _translator.Translate(cmd) : cmd;
+                    _commands[final.DeduplicationKey] = final;
                 }
                 if (commands.Count == 0)
                 {

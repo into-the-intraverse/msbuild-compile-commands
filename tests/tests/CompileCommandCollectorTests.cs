@@ -231,6 +231,41 @@ namespace MsBuildCompileCommands.Tests
             Assert.Contains("kernel.cu", commands[0].File);
         }
 
+        [Fact]
+        public void Translates_flags_when_translator_is_provided()
+        {
+            var rules = new[] { new TranslationRule(ParserKind.Msvc, "/EHsc", "-fexceptions") };
+            var translator = new FlagTranslator(rules);
+            var collector = new CompileCommandCollector(filter: null, translator: translator);
+
+            var projectStarted = CreateProjectStartedEvent(@"C:\project\myapp.vcxproj", projectContextId: 1);
+            collector.HandleEvent(projectStarted);
+
+            var taskCmd = CreateTaskCommandLineEvent("cl.exe /c /EHsc main.cpp", projectContextId: 1);
+            collector.HandleEvent(taskCmd);
+
+            List<CompileCommand> commands = collector.GetCommands();
+            Assert.Single(commands);
+            Assert.Contains("-fexceptions", commands[0].Arguments);
+            Assert.DoesNotContain("/EHsc", commands[0].Arguments);
+        }
+
+        [Fact]
+        public void No_translator_passes_flags_through_unchanged()
+        {
+            var collector = new CompileCommandCollector();
+
+            var projectStarted = CreateProjectStartedEvent(@"C:\project\myapp.vcxproj", projectContextId: 1);
+            collector.HandleEvent(projectStarted);
+
+            var taskCmd = CreateTaskCommandLineEvent("cl.exe /c /EHsc main.cpp", projectContextId: 1);
+            collector.HandleEvent(taskCmd);
+
+            List<CompileCommand> commands = collector.GetCommands();
+            Assert.Single(commands);
+            Assert.Contains("/EHsc", commands[0].Arguments);
+        }
+
         // --- Helper methods to create MSBuild event instances ---
 
         private static ProjectStartedEventArgs CreateProjectStartedEvent(string projectFile, int projectContextId)
