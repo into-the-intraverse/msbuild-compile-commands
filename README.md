@@ -251,10 +251,8 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 - The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
 - Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
-- PCH: `/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header; the `.pch` file itself is not used
 - Does not handle custom MSBuild tasks that invoke compilers through non-standard mechanisms
 - Path normalization assumes Windows drive-letter paths
-- No support for cross-compilation scenarios in v0.1
 - Generated source files are captured if they appear in the cl.exe command line, but the files must exist for clangd to use them
 
 ## Architecture
@@ -262,6 +260,7 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 ```
 MsBuildCompileCommands.Core (netstandard2.0)
   Models/CompileCommand           Compile entry model
+  Models/CompileCommandFilter     Project/configuration filter
   Extraction/CommandLineTokenizer Windows command line tokenizer
   Extraction/ClCommandParser      cl.exe/clang-cl argument parser
   Extraction/CompileCommandCollector  MSBuild event processor
@@ -288,11 +287,7 @@ dotnet build -c Release
 
 ## Roadmap
 
-- [x] NuGet package for the logger
-- [x] `dotnet tool` packaging for the CLI
-- [x] Filter by project/configuration
 - [ ] Custom flag translation rules
-- [x] PCH-aware entry generation
 - [ ] Support for CUDA nvcc through MSBuild
 - [ ] Linux/macOS support for offline binlog parsing
 
