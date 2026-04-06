@@ -42,6 +42,9 @@ namespace MsBuildCompileCommands.Cli
             string? projectFilter = null;
             string? configFilter = null;
             bool evaluate = false;
+            string? flagRulesPath = null;
+            bool noTranslate = false;
+            bool dumpRules = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -94,6 +97,28 @@ namespace MsBuildCompileCommands.Cli
                 {
                     evaluate = true;
                 }
+                else if (string.Equals(arg, "--flag-rules", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                        flagRulesPath = args[++i];
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --flag-rules requires a path argument.");
+                        return 1;
+                    }
+                }
+                else if (arg.StartsWith("--flag-rules=", StringComparison.OrdinalIgnoreCase))
+                {
+                    flagRulesPath = arg.Substring("--flag-rules=".Length);
+                }
+                else if (string.Equals(arg, "--no-translate", StringComparison.OrdinalIgnoreCase))
+                {
+                    noTranslate = true;
+                }
+                else if (string.Equals(arg, "--dump-rules", StringComparison.OrdinalIgnoreCase))
+                {
+                    dumpRules = true;
+                }
                 else if (!arg.StartsWith("-", StringComparison.Ordinal))
                 {
                     binlogPath = arg;
@@ -103,6 +128,12 @@ namespace MsBuildCompileCommands.Cli
                     Console.Error.WriteLine($"Error: Unknown option '{arg}'. Use --help for usage.");
                     return 1;
                 }
+            }
+
+            if (dumpRules)
+            {
+                Console.WriteLine(TranslationRuleLoader.Serialize(TranslationRule.MsvcBuiltins()));
+                return 0;
             }
 
             if (binlogPath == null)
@@ -117,16 +148,45 @@ namespace MsBuildCompileCommands.Cli
                 return 1;
             }
 
-            return GenerateFromBinlog(binlogPath, outputPath, overwrite, projectFilter, configFilter, evaluate);
+            return GenerateFromBinlog(binlogPath, outputPath, overwrite, projectFilter, configFilter, evaluate, flagRulesPath, noTranslate);
         }
 
         private static int GenerateFromBinlog(string binlogPath, string outputPath, bool overwrite,
-            string? projectFilter, string? configFilter, bool evaluate)
+            string? projectFilter, string? configFilter, bool evaluate, string? flagRulesPath, bool noTranslate)
         {
             Console.Error.WriteLine($"Reading {binlogPath}...");
 
             CompileCommandFilter? filter = BuildFilter(projectFilter, configFilter);
-            var collector = new CompileCommandCollector(filter);
+
+            FlagTranslator? translator = null;
+            if (!noTranslate)
+            {
+                IReadOnlyList<TranslationRule> rules;
+                if (flagRulesPath != null)
+                {
+                    if (!File.Exists(flagRulesPath))
+                    {
+                        Console.Error.WriteLine($"Error: Flag rules file not found: {flagRulesPath}");
+                        return 1;
+                    }
+                    try
+                    {
+                        rules = TranslationRuleLoader.Load(flagRulesPath);
+                        Console.Error.WriteLine($"Loaded {rules.Count} translation rules from {flagRulesPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error loading flag rules: {ex.Message}");
+                        return 1;
+                    }
+                }
+                else
+                {
+                    rules = TranslationRule.MsvcBuiltins();
+                }
+                translator = new FlagTranslator(rules);
+            }
+            var collector = new CompileCommandCollector(filter, translator);
 
             try
             {
@@ -261,6 +321,10 @@ OPTIONS:
     --configuration <names> Include only these configurations (comma-separated)
     --evaluate              After binlog replay, evaluate .vcxproj files to fill in
                             source files not captured by build events
+    --flag-rules <path>     Path to custom flag translation rules JSON file
+                            (replaces built-in MSVC→clang rules entirely)
+    --no-translate          Disable all flag translation (built-in and custom)
+    --dump-rules            Print built-in translation rules as JSON and exit
     -h, --help              Show this help message
     --version               Show version
 
