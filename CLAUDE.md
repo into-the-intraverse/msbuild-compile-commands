@@ -32,7 +32,8 @@ Tests in `tests/tests/` (xunit).
 ### Data flow
 
 ```
-MSBuild events → CompileCommandCollector → ClCommandParser → CompileCommand[] → CompileCommandsWriter → JSON
+MSBuild events → CompileCommandCollector → CommandParserFactory → [Msvc|GccClang|Nvcc]Parser → CompileCommand[] → CompileCommandsWriter → JSON
+                                         → TaskMapperRegistry → [ClCompile|CudaCompile|Generic]Mapper ↗ (fallback when no command-line event)
 ```
 
 - `CompileCommandCollector` routes MSBuild events, tracks project context, applies optional `CompileCommandFilter`
@@ -45,6 +46,11 @@ MSBuild events → CompileCommandCollector → ClCommandParser → CompileComman
 - Deduplication is by normalized file path (case-insensitive, last-wins)
 - Writer always merges by default; `overwrite=true` for clean-slate mode
 - Paths normalized to forward slashes with uppercase drive letters
+- `ICommandParser` is the parser interface; `CommandParserFactory` dispatches by compiler detection
+- Parser priority: nvcc → MSVC (clang-cl) → GCC/Clang
+- Task parameter extraction synthesizes commands when `TaskCommandLineEventArgs` is absent; event-captured commands take precedence
+- `--evaluate` mode lives in CLI only (requires `Microsoft.Build`, not available in core/logger)
+- `ClCommandParser` is an `[Obsolete]` wrapper around `MsvcCommandParser` for backward compatibility
 
 ## Packaging
 

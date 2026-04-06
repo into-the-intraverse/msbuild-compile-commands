@@ -127,6 +127,7 @@ CLI options:
 - `--overwrite` - Overwrite existing file instead of merging (default: merge with existing)
 - `--project <names>` - Include only these projects (comma-separated, matched by project name)
 - `--configuration <names>` - Include only these configurations (comma-separated)
+- `--evaluate` - After binlog replay, evaluate `.vcxproj` files to fill in source files not captured by build events (requires MSBuild installation)
 - `--version` - Show version
 - `-h, --help` - Show help
 
@@ -244,16 +245,20 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 ## Supported compilers
 
 - **cl.exe** (MSVC) - primary target
-- **clang-cl** - supported when invoked through MSBuild
+- **clang-cl** - MSVC-compatible Clang driver
+- **gcc / g++** - GNU Compiler Collection (including cross-compiler and versioned variants like `x86_64-linux-gnu-gcc`, `gcc-12`)
+- **clang / clang++** - LLVM Clang (native mode, not clang-cl)
+- **nvcc** - NVIDIA CUDA compiler (extracts host compiler flags via `-Xcompiler`/`--compiler-options`)
 
 ## Limitations
 
-- Only captures cl.exe / clang-cl invocations; other compilers (gcc, clang, nvcc) are not yet recognized
-- Custom MSBuild tasks that invoke compilers without logging command lines produce no output
+- The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
+- PCH: `/Yc` (create) is stripped and `/Yu` (use) is converted to `/FI` (forced include) so clangd sees the implicit PCH header; the `.pch` file itself is not used
+- Custom MSBuild tasks that invoke compilers via `System.Diagnostics.Process` without logging and without standard task parameters are not captured by event-based collection; use `--evaluate` to extract flags from project files as a fallback
+- Project evaluation (`--evaluate`) requires MSBuild/Visual Studio to be installed and only works with the CLI tool
 - Path normalization assumes Windows drive-letter paths
-- The first build should be a full build to populate `compile_commands.json`; subsequent incremental builds merge new entries and prune deleted files automatically
-- Generated source files are captured if they appear in the cl.exe command line, but the files must exist for clangd to use them
+- Generated source files are captured if they appear in the compiler command line, but the files must exist for clangd to use them
 
 ## Architecture
 
@@ -261,9 +266,18 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 MsBuildCompileCommands.Core (netstandard2.0)
   Models/CompileCommand           Compile entry model
   Models/CompileCommandFilter     Project/configuration filter
+  Extraction/ICommandParser       Parser interface
+  Extraction/CommandParserFactory  Selects parser by compiler detection
+  Extraction/MsvcCommandParser    cl.exe/clang-cl argument parser
+  Extraction/GccClangCommandParser gcc/g++/clang/clang++ argument parser
+  Extraction/NvccCommandParser    nvcc argument parser (host flag extraction)
   Extraction/CommandLineTokenizer Windows command line tokenizer
-  Extraction/ClCommandParser      cl.exe/clang-cl argument parser
   Extraction/CompileCommandCollector  MSBuild event processor
+  Extraction/ITaskMapper          Task parameter → CompileCommand mapper interface
+  Extraction/TaskMapperRegistry   Dispatches to known + fallback mappers
+  Extraction/ClCompileTaskMapper  Maps CL task parameters
+  Extraction/CudaCompileTaskMapper Maps CudaCompile task parameters
+  Extraction/GenericTaskMapper    Best-effort fallback for unknown tasks
   IO/ResponseFileParser           @response-file expansion
   IO/CompileCommandsWriter        JSON output
   Utils/PathNormalizer            Path normalization
@@ -273,6 +287,8 @@ MsBuildCompileCommands (netstandard2.0, logger)
 
 MsBuildCompileCommands (net8.0, CLI)
   Program                         Binlog replay CLI
+  Evaluation/ProjectEvaluator     .vcxproj evaluation via MSBuild API
+  Evaluation/ClCompileItemMapper  ClCompile metadata → flags mapping
 ```
 
 The core library targets `netstandard2.0` for compatibility with both .NET Framework MSBuild (Visual Studio) and .NET SDK MSBuild.
@@ -287,10 +303,9 @@ dotnet build -c Release
 
 ## Roadmap
 
-- [x] Filter by project name and build configuration
-- [ ] Multi-compiler support (gcc, g++, clang, clang++, nvcc) — [design spec](docs/superpowers/specs/2026-04-06-custom-msbuild-multi-compiler-design.md)
-- [ ] Task parameter extraction for custom MSBuild tasks that don't log command lines
-- [ ] Project evaluation mode (`--evaluate`) to read `ClCompile` items directly from `.vcxproj` files
+- [ ] Custom flag translation rules
+- [ ] ETW-based process tracing for compilers invoked without MSBuild events
+- [ ] Linux/macOS support for offline binlog parsing
 
 ## License
 
