@@ -202,6 +202,34 @@ namespace MsBuildCompileCommands.Tests
         }
 
         [Fact]
+        public void Unexpanded_response_file_token_is_not_treated_as_source_file()
+        {
+            var rsp = new ResponseFileParser(_ => null);
+            var parser = new ClCommandParser(rsp);
+
+            string cmd = @"cl.exe /c @C:\project\flags.rsp main.cpp";
+            List<CompileCommand> commands = parser.Parse(cmd, @"C:\project");
+
+            Assert.Single(commands);
+            Assert.Contains("main.cpp", commands[0].File);
+            Assert.DoesNotContain(commands[0].Arguments, a => a.Contains(".rsp"));
+        }
+
+        [Fact]
+        public void Unexpanded_response_file_emits_diagnostic()
+        {
+            var rsp = new ResponseFileParser(_ => null);
+            var parser = new ClCommandParser(rsp);
+            var diagnostics = new List<string>();
+
+            string cmd = @"cl.exe /c @C:\project\flags.rsp main.cpp";
+            parser.Parse(cmd, @"C:\project", diagnostics);
+
+            Assert.Single(diagnostics);
+            Assert.Contains("flags.rsp", diagnostics[0]);
+        }
+
+        [Fact]
         public void Realistic_cmake_command_line()
         {
             string cmd = @"C:\PROGRA~1\MICROS~2\2022\Professional\VC\Tools\MSVC\14.38.33130\bin\Hostx64\x64\cl.exe " +

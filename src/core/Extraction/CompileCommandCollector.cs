@@ -86,7 +86,7 @@ namespace MsBuildCompileCommands.Core.Extraction
 
             try
             {
-                List<CompileCommand> commands = _parser.Parse(commandLine, directory);
+                List<CompileCommand> commands = _parser.Parse(commandLine, directory, _diagnostics);
 
                 foreach (CompileCommand cmd in commands)
                 {

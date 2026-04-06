@@ -202,7 +202,7 @@ Paths are normalized to forward slashes with uppercase drive letters for consist
 
 - The first build must be a clean build to populate `compile_commands.json`; subsequent incremental builds automatically merge new entries and prune deleted files
 - Only captures compilation commands (cl.exe / clang-cl); linking, lib, and other tools are ignored
-- Response file expansion requires the response files to exist on disk at parse time
+- Response file expansion requires the response files to exist on disk at parse time; a warning is emitted when a response file cannot be read (common when replaying `.binlog` files after the build's temporary files have been cleaned up)
 - PCH flags (`/Yu`, `/Yc`) are passed through but may cause clangd warnings
 - Does not handle custom MSBuild tasks that invoke compilers through non-standard mechanisms
 - Path normalization assumes Windows drive-letter paths

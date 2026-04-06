@@ -68,7 +68,7 @@ namespace MsBuildCompileCommands.Core.Extraction
         /// Parse a cl.exe / clang-cl command line into compile command entries.
         /// Returns one entry per source file.
         /// </summary>
-        public List<CompileCommand> Parse(string commandLine, string directory)
+        public List<CompileCommand> Parse(string commandLine, string directory, IList<string>? diagnostics = null)
         {
             int compilerEnd = FindCompilerEnd(commandLine);
             if (compilerEnd < 0)
@@ -89,6 +89,15 @@ namespace MsBuildCompileCommands.Core.Extraction
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
+
+                // Skip unexpanded response-file references (@file.rsp tokens that
+                // ResponseFileParser could not read). Without this guard, the token
+                // would be misclassified as a source file with an unknown extension.
+                if (token.Length > 1 && token[0] == '@')
+                {
+                    diagnostics?.Add($"Warning: could not expand response file '{token.Substring(1).Trim('"')}'; flags from this file will be missing");
+                    continue;
+                }
 
                 if (IsOutputOption(token))
                 {
