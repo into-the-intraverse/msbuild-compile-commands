@@ -9,6 +9,8 @@
     <AssemblyName>MsBuildCompileCommands.Tests</AssemblyName>
     <RootNamespace>MsBuildCompileCommands.Tests</RootNamespace>
     <IsTestProject>true</IsTestProject>
+    <!-- ClCommandParser is intentionally obsolete; tests exercise backward-compat wrapper -->
+    <NoWarn>CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -15,20 +15,20 @@ namespace MsBuildCompileCommands.Core.Extraction
     {
         private readonly Dictionary<int, string> _projectDirectories = new Dictionary<int, string>();
         private readonly Dictionary<string, CompileCommand> _commands = new Dictionary<string, CompileCommand>(StringComparer.OrdinalIgnoreCase);
-        private readonly ClCommandParser _parser;
+        private readonly MsvcCommandParser _parser;
         private readonly CompileCommandFilter? _filter;
         private readonly Dictionary<int, string> _projectNames = new Dictionary<int, string>();
         private readonly Dictionary<int, string> _projectConfigurations = new Dictionary<int, string>();
 
         private readonly List<string> _diagnostics = new List<string>();
 
-        public CompileCommandCollector() : this(new ClCommandParser(), null) { }
+        public CompileCommandCollector() : this(new MsvcCommandParser(), null) { }
 
-        public CompileCommandCollector(CompileCommandFilter? filter) : this(new ClCommandParser(), filter) { }
+        public CompileCommandCollector(CompileCommandFilter? filter) : this(new MsvcCommandParser(), filter) { }
 
-        public CompileCommandCollector(ClCommandParser parser) : this(parser, null) { }
+        public CompileCommandCollector(MsvcCommandParser parser) : this(parser, null) { }
 
-        public CompileCommandCollector(ClCommandParser parser, CompileCommandFilter? filter)
+        public CompileCommandCollector(MsvcCommandParser parser, CompileCommandFilter? filter)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _filter = filter;
@@ -102,7 +102,7 @@ namespace MsBuildCompileCommands.Core.Extraction
             if (string.IsNullOrWhiteSpace(commandLine))
                 return;
 
-            if (!ClCommandParser.IsCompilerInvocation(commandLine))
+            if (!MsvcCommandParser.IsCompilerInvocationStatic(commandLine))
                 return;
 
             if (!PassesFilter(e.BuildEventContext))
