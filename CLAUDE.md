@@ -10,9 +10,12 @@ MsBuildCompileCommands generates `compile_commands.json` from MSBuild-based C/C+
 dotnet build              # Debug build
 dotnet test               # Run all tests
 dotnet build -c Release   # Release build
+rm -rf src/*/bin src/*/obj tests/*/bin tests/*/obj bin/ obj/  # Clean all outputs
 ```
 
 Output goes to `bin/<project>/` (configured in `Directory.Build.props`).
+
+CI runs Release build + test on dotnet 8.0/9.0 matrix (see `.github/workflows/ci.yml`).
 
 ## Architecture
 
@@ -49,6 +52,7 @@ MSBuild events → CompileCommandCollector → ClCommandParser → CompileComman
 - **dotnet tool**: `dotnet pack src/cli/cli.csproj` — installs as `msbuild-compile-commands`
 - **Conan recipe**: `conan/conanfile.py`
 - Version set in `Directory.Build.props`, CLI reads from assembly metadata
+- Run `/pack` for the full packaging workflow (tests, NuGet, Conan, artifact summary)
 
 ## Style
 
