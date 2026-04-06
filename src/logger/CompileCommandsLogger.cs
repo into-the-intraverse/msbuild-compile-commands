@@ -42,8 +42,8 @@ namespace MsBuildCompileCommands
             eventSource.MessageRaised += OnMessageRaised;
             eventSource.ProjectStarted += OnProjectStarted;
             eventSource.BuildFinished += OnBuildFinished;
-
-            // TaskCommandLineEventArgs is delivered via MessageRaised (it inherits BuildMessageEventArgs)
+            eventSource.TaskStarted += OnTaskStarted;
+            eventSource.TaskFinished += OnTaskFinished;
         }
 
         public void Shutdown()
@@ -58,10 +58,17 @@ namespace MsBuildCompileCommands
 
         private void OnMessageRaised(object sender, BuildMessageEventArgs e)
         {
-            if (e is TaskCommandLineEventArgs taskCmd)
-            {
-                _collector?.HandleEvent(taskCmd);
-            }
+            _collector?.HandleEvent(e);
+        }
+
+        private void OnTaskStarted(object sender, TaskStartedEventArgs e)
+        {
+            _collector?.HandleEvent(e);
+        }
+
+        private void OnTaskFinished(object sender, TaskFinishedEventArgs e)
+        {
+            _collector?.HandleEvent(e);
         }
 
         private void OnBuildFinished(object sender, BuildFinishedEventArgs e)

@@ -19,8 +19,18 @@ namespace MsBuildCompileCommands.Core.Extraction
         private readonly Dictionary<int, string> _projectNames = new Dictionary<int, string>();
         private readonly Dictionary<int, string> _projectConfigurations = new Dictionary<int, string>();
         private readonly Dictionary<int, string> _projectFiles = new Dictionary<int, string>();
+        private readonly TaskMapperRegistry _taskMapperRegistry = new TaskMapperRegistry();
+        private readonly Dictionary<int, TaskState> _activeTasks = new Dictionary<int, TaskState>();
 
         private readonly List<string> _diagnostics = new List<string>();
+
+        private sealed class TaskState
+        {
+            public string TaskName;
+            public bool HadCommandLine;
+            public Dictionary<string, List<string>> Parameters = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            public TaskState(string taskName) { TaskName = taskName; }
+        }
 
         public CompileCommandCollector() : this(null) { }
 
@@ -45,8 +55,17 @@ namespace MsBuildCompileCommands.Core.Extraction
                 case ProjectStartedEventArgs projectStarted:
                     HandleProjectStarted(projectStarted);
                     break;
+                case TaskStartedEventArgs taskStarted:
+                    HandleTaskStarted(taskStarted);
+                    break;
                 case TaskCommandLineEventArgs taskCommandLine:
                     HandleTaskCommandLine(taskCommandLine);
+                    break;
+                case TaskFinishedEventArgs taskFinished:
+                    HandleTaskFinished(taskFinished);
+                    break;
+                default:
+                    HandlePossibleTaskParameter(e);
                     break;
             }
         }
@@ -59,6 +78,82 @@ namespace MsBuildCompileCommands.Core.Extraction
             var result = new List<CompileCommand>(_commands.Values);
             result.Sort((a, b) => string.Compare(a.File, b.File, StringComparison.OrdinalIgnoreCase));
             return result;
+        }
+
+        private void HandleTaskStarted(TaskStartedEventArgs e)
+        {
+            if (e.TaskName == null || e.BuildEventContext == null)
+                return;
+            int nodeId = e.BuildEventContext.NodeId;
+            _activeTasks[nodeId] = new TaskState(e.TaskName);
+        }
+
+        private void HandleTaskFinished(TaskFinishedEventArgs e)
+        {
+            if (e.BuildEventContext == null)
+                return;
+            int nodeId = e.BuildEventContext.NodeId;
+            if (!_activeTasks.TryGetValue(nodeId, out TaskState? state))
+                return;
+            _activeTasks.Remove(nodeId);
+
+            if (state.HadCommandLine || state.Parameters.Count == 0)
+                return;
+            if (!PassesFilter(e.BuildEventContext))
+                return;
+
+            string directory = ResolveDirectory(e.BuildEventContext);
+            try
+            {
+                List<CompileCommand> commands = _taskMapperRegistry.TryMap(state.TaskName, state.Parameters, directory);
+                foreach (CompileCommand cmd in commands)
+                {
+                    if (!_commands.ContainsKey(cmd.DeduplicationKey))
+                        _commands[cmd.DeduplicationKey] = cmd;
+                }
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.Add($"Error mapping task parameters for '{state.TaskName}': {ex.Message}");
+            }
+        }
+
+        private void HandlePossibleTaskParameter(BuildEventArgs e)
+        {
+            if (!(e is TaskParameterEventArgs taskParam))
+                return;
+            if (e.BuildEventContext == null)
+                return;
+            if (taskParam.Kind != TaskParameterMessageKind.TaskInput)
+                return;
+
+            int nodeId = e.BuildEventContext.NodeId;
+            if (!_activeTasks.TryGetValue(nodeId, out TaskState? state))
+                return;
+
+            string paramName = taskParam.ItemType;
+            if (string.IsNullOrEmpty(paramName))
+                return;
+
+            var values = new List<string>();
+            if (taskParam.Items != null)
+            {
+                foreach (object? item in taskParam.Items)
+                {
+                    if (item is ITaskItem taskItem)
+                    {
+                        values.Add(taskItem.ItemSpec);
+                    }
+                    else if (item != null)
+                    {
+                        string? str = item.ToString();
+                        if (str != null)
+                            values.Add(str);
+                    }
+                }
+            }
+            if (values.Count > 0)
+                state.Parameters[paramName] = values;
         }
 
         private void HandleProjectStarted(ProjectStartedEventArgs e)
@@ -94,6 +189,13 @@ namespace MsBuildCompileCommands.Core.Extraction
 
         private void HandleTaskCommandLine(TaskCommandLineEventArgs e)
         {
+            if (e.BuildEventContext != null)
+            {
+                int nodeId = e.BuildEventContext.NodeId;
+                if (_activeTasks.TryGetValue(nodeId, out TaskState? activeState))
+                    activeState.HadCommandLine = true;
+            }
+
             string? commandLine = e.CommandLine;
             if (string.IsNullOrWhiteSpace(commandLine))
                 return;
