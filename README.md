@@ -103,6 +103,8 @@ msbuild MyProject.sln -logger:MsBuildCompileCommands.Logger,path\to\MsBuildCompi
 Logger parameters (semicolon-separated):
 - `output=<path>` - Output file path (default: `compile_commands.json`)
 - `overwrite=true` - Overwrite existing file instead of merging (default: merge with existing)
+- `project=Name1,Name2` - Include only these projects (comma-separated)
+- `configuration=Cfg` - Include only these configurations (comma-separated)
 
 ### Binlog replay (recommended for CI)
 
@@ -123,6 +125,8 @@ MsBuildCompileCommands build.binlog --overwrite
 CLI options:
 - `-o, --output <path>` - Output file path (default: `compile_commands.json`)
 - `--overwrite` - Overwrite existing file instead of merging (default: merge with existing)
+- `--project <names>` - Include only these projects (comma-separated, matched by project name)
+- `--configuration <names>` - Include only these configurations (comma-separated)
 - `--version` - Show version
 - `-h, --help` - Show help
 
@@ -286,7 +290,7 @@ dotnet build -c Release
 
 - [x] NuGet package for the logger
 - [x] `dotnet tool` packaging for the CLI
-- [ ] Filter by project/configuration
+- [x] Filter by project/configuration
 - [ ] Custom flag translation rules
 - [x] PCH-aware entry generation
 - [ ] Support for CUDA nvcc through MSBuild
