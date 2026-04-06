@@ -18,11 +18,15 @@ namespace MsBuildCompileCommands.Core.Models
         /// <summary>Argument list (argv) for the compilation, including compiler path at index 0.</summary>
         public IReadOnlyList<string> Arguments { get; }
 
-        public CompileCommand(string directory, string file, IReadOnlyList<string> arguments)
+        /// <summary>Which compiler parser produced this entry.</summary>
+        public ParserKind ParserKind { get; }
+
+        public CompileCommand(string directory, string file, IReadOnlyList<string> arguments, ParserKind parserKind = ParserKind.Unknown)
         {
             Directory = directory ?? throw new ArgumentNullException(nameof(directory));
             File = file ?? throw new ArgumentNullException(nameof(file));
             Arguments = arguments ?? throw new ArgumentNullException(nameof(arguments));
+            ParserKind = parserKind;
         }
 
         /// <summary>
