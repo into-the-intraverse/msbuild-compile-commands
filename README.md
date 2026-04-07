@@ -12,10 +12,16 @@ Windows C++ projects using CMake with Visual Studio generators cannot use `CMAKE
 
 - [ ] ETW-based process tracing for compilers invoked without MSBuild events
 - [ ] Linux/macOS support for offline binlog parsing
-- [ ] First build must be a clean build to populate `compile_commands.json` (incremental builds merge/prune automatically after that)
-- [ ] Response file expansion requires files on disk at parse time (warning emitted when replaying `.binlog` after temp files are cleaned)
-- [ ] Custom MSBuild tasks invoking compilers via `Process` without logging or standard task parameters are not captured
-- [ ] Generated source files are captured but must exist on disk for clangd to use them
+
+## Known limitations
+
+- **First build must be a clean build** to populate `compile_commands.json`. MSBuild only fires compile events for files that actually get compiled. On a clean build every source file compiles, so the tool sees them all. After that first run, incremental builds merge new entries and prune deleted files automatically.
+
+- **Response file expansion requires the files on disk at parse time.** Compilers support `@response.rsp` files that contain flags too long for the command line. The tool reads those files to extract the full set of flags. When replaying a `.binlog` after the build tree has been cleaned, the response files may no longer exist — the tool emits a warning and continues with what it has.
+
+- **Custom MSBuild tasks that invoke compilers via `Process` are not captured.** The tool listens for MSBuild task events and command-line arguments logged by standard build tasks like `CL`. If a custom task spawns `cl.exe` directly using `System.Diagnostics.Process` instead of going through MSBuild's task infrastructure, no events are fired and the tool has no way to see those compilations.
+
+- **Generated source files are captured but must exist on disk for clangd to use them.** The tool records the file path and flags for every compilation it sees, including generated files. However, clangd needs to open and read those files to provide IntelliSense. If a generated file is only created during the build and deleted afterward, clangd will report it as missing.
 
 ## What it allows you to do
 
